@@ -57,9 +57,9 @@ monkey-ball-android/
 - [ ] Dźwięk: `audio_cpal` (AAudio), zawieszany w `on_visible(false)`.
 - [ ] Dotyk i przycisk wstecz: obsługuje je sterownik. Dotyk w menu działa na emulatorze; sprawdzić sterowanie kulką i systemowy gest wstecz, na telefonie.
 - [ ] Ekran zawsze włączony (`FLAG_KEEP_SCREEN_ON`) i tryb immersive.
-- [ ] Wycięcia ekranu (`Platform::insets`): odczytać z Kotlina, jeśli winit ich nie podaje. **Potrzebne**: na emulatorze przycisk wstecz i HUD wchodzą pod pasek stanu.
+- [x] Wycięcia ekranu (`Platform::insets`): z Kotlina (`onApplyWindowInsets`), paski systemowe i wycięcie aparatu.
 - [ ] `dataExtractionRules`: wyłączyć `game.pack` z kopii zapasowej, zapisy zostawić.
-- [ ] Sprawdzić odtwarzanie powierzchni po wyjściu z aplikacji i powrocie oraz po obrocie.
+- [ ] Sprawdzić odtwarzanie powierzchni po wyjściu z aplikacji i powrocie (obrót w trakcie etapu działa na emulatorze).
 - [x] Fallback na GLES, gdy Vulkan nie działa (`Platform::backends`): Vulkan, gdy jest adapter, inaczej GLES; wymuszenie przez `debug.monkeyball.backend`.
 
 ## Etap 3: żyroskop (opcjonalne)

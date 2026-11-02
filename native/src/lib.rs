@@ -16,6 +16,7 @@ use std::os::fd::FromRawFd;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use jni::objects::JObject;
 use jni::{JNIEnv, JavaVM};
@@ -27,12 +28,14 @@ use mb_app::import::Importer;
 use mb_app::import_screen::{DiscImage, ImageSlot, ImportScreen};
 use mb_app::input::InputState;
 use mb_app::menu::Menu;
+use mb_app::ui::Insets;
 use mb_assets::disc::{DiscStream, FileStream};
 use mb_driver::Platform;
 use mb_game::{FileStorage, SlotStorage};
 use winit::event_loop::EventLoop;
 use winit::platform::android::EventLoopBuilderExtAndroid;
 use winit::platform::android::activity::AndroidApp;
+use winit::window::Window;
 
 /// The imported game data, in the app's internal files directory next to the saves.
 const PACK_FILE: &str = "game.pack";
@@ -66,7 +69,11 @@ fn system_property(name: &std::ffi::CStr) -> Option<String> {
     // SAFETY: the buffer has the size bionic writes at most, NUL included.
     let len = unsafe { __system_property_get(name.as_ptr(), value.as_mut_ptr()) };
     // SAFETY: bionic NUL-terminates what it wrote.
-    (len > 0).then(|| unsafe { std::ffi::CStr::from_ptr(value.as_ptr()) }.to_string_lossy().into_owned())
+    (len > 0).then(|| {
+        unsafe { std::ffi::CStr::from_ptr(value.as_ptr()) }
+            .to_string_lossy()
+            .into_owned()
+    })
 }
 
 /// The one graphics backend to run on. wgpu with several backends at once makes a surface for each, and on
@@ -79,7 +86,9 @@ fn choose_backend() -> wgpu::Backends {
         Some("gl") => return wgpu::Backends::GL,
         _ => {}
     }
-    let instance = wgpu::Instance::new(mb_app::gpu::instance_descriptor(Some(wgpu::Backends::VULKAN)));
+    let instance = wgpu::Instance::new(mb_app::gpu::instance_descriptor(Some(
+        wgpu::Backends::VULKAN,
+    )));
     let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::VULKAN));
     if adapters.is_empty() {
         wgpu::Backends::GL
@@ -100,6 +109,25 @@ extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeImagePick
     fd: jni::sys::jint,
 ) {
     *PICKED.lock().unwrap_or_else(|e| e.into_inner()) = Some(fd);
+}
+
+/// Space covered by system bars and cutouts (left, top, right, bottom), in window pixels, as the activity
+/// last reported it. Written on the UI thread, read every frame on the game thread.
+static INSETS: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
+
+/// `MainActivity.nativeInsets(left, top, right, bottom)`, on the UI thread.
+#[unsafe(no_mangle)]
+extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeInsets(
+    _env: JNIEnv,
+    _this: JObject,
+    left: jni::sys::jint,
+    top: jni::sys::jint,
+    right: jni::sys::jint,
+    bottom: jni::sys::jint,
+) {
+    for (slot, px) in INSETS.iter().zip([left, top, right, bottom]) {
+        slot.store(px.max(0) as u32, Ordering::Relaxed);
+    }
 }
 
 /// Call a `void method()` of the activity (`MainActivity`) from the game thread.
@@ -130,7 +158,10 @@ fn stored_pack(pack: &Path) -> Option<(Content, String, u64)> {
     match open_pack_file(pack) {
         Ok(found) => Some(found),
         Err(e) => {
-            log(LOG_ERROR, &format!("the stored game data cannot be used ({e}); importing again"));
+            log(
+                LOG_ERROR,
+                &format!("the stored game data cannot be used ({e}); importing again"),
+            );
             let _ = std::fs::remove_file(pack);
             None
         }
@@ -192,10 +223,24 @@ impl Platform for Android {
                     self.exit = true;
                 }
                 Command::GameDataReady { bytes } => {
-                    host.info.insert(0, format!("Game data: {} MB", bytes >> 20));
+                    host.info
+                        .insert(0, format!("Game data: {} MB", bytes >> 20));
                 }
                 _ => {}
             }
+        }
+    }
+
+    fn insets(&mut self, _window: &Window) -> Insets {
+        // The surface is the window at full resolution (the default render scale), so window pixels are
+        // surface pixels.
+        let [left, top, right, bottom] =
+            INSETS.each_ref().map(|v| v.load(Ordering::Relaxed) as f32);
+        Insets {
+            left,
+            top,
+            right,
+            bottom,
         }
     }
 
@@ -234,8 +279,9 @@ fn run(app: AndroidApp) -> Result<(), String> {
         .build()
         .map_err(|e| format!("event loop: {e}"))?;
     let audio = Audio::new(Box::new(mb_app::audio_cpal::CpalBackend::new()));
-    let menu: Box<dyn Game> =
-        Box::new(Menu::new(Box::new(SlotStorage::new(FileStorage::new(&dir)))).with_audio(audio.clone()));
+    let menu: Box<dyn Game> = Box::new(
+        Menu::new(Box::new(SlotStorage::new(FileStorage::new(&dir)))).with_audio(audio.clone()),
+    );
     // The system closes apps: no "Quit" on the title. The game data can be removed from the options.
     let mut host = Host::new(
         Caps {
@@ -257,7 +303,8 @@ fn run(app: AndroidApp) -> Result<(), String> {
             let data = Rc::new(LatePack::default());
             let slot = ImageSlot::default();
             images = Some(slot.clone());
-            let screen: Box<dyn Game> = Box::new(ImportScreen::new(pack.clone(), data.clone(), slot, menu));
+            let screen: Box<dyn Game> =
+                Box::new(ImportScreen::new(pack.clone(), data.clone(), slot, menu));
             (Content::new(data), screen)
         }
     };
@@ -274,7 +321,10 @@ fn run(app: AndroidApp) -> Result<(), String> {
     if platform.remove_data {
         // The run has ended, so nothing has the pack open any more.
         match std::fs::remove_file(&pack) {
-            Ok(()) => log(LOG_INFO, "game data removed; the disc image is asked for at the next start"),
+            Ok(()) => log(
+                LOG_INFO,
+                "game data removed; the disc image is asked for at the next start",
+            ),
             Err(e) => log(LOG_ERROR, &format!("could not remove the game data: {e}")),
         }
     }

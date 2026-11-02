@@ -1,8 +1,10 @@
 package io.github.rmesek.monkeyball
 
 import android.os.Bundle
+import android.view.View
 import android.view.WindowManager
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowInsetsCompat
 import com.google.androidgamesdk.GameActivity
 
 /**
@@ -37,6 +39,23 @@ class MainActivity : GameActivity() {
     @Suppress("unused")
     fun pickImage() = runOnUiThread { pickImage.launch(arrayOf("*/*")) }
 
+    /**
+     * The window runs edge to edge (targetSdk 35+), under the status and navigation bars and around a
+     * display cutout. GameActivity listens to inset changes itself; on top of that the game gets the
+     * space those cover, in pixels, so it keeps its buttons and HUD out of it.
+     */
+    override fun onApplyWindowInsets(view: View, insets: WindowInsetsCompat): WindowInsetsCompat {
+        val result = super.onApplyWindowInsets(view, insets)
+        val covered = insets.getInsets(
+            WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+        )
+        nativeInsets(covered.left, covered.top, covered.right, covered.bottom)
+        return result
+    }
+
     /** The picked file's descriptor, or -1 when the player cancelled. Implemented in native/src/lib.rs. */
     private external fun nativeImagePicked(fd: Int)
+
+    /** Space covered by system bars and cutouts, in pixels. Implemented in native/src/lib.rs. */
+    private external fun nativeInsets(left: Int, top: Int, right: Int, bottom: Int)
 }

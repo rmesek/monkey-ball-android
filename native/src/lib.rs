@@ -102,7 +102,7 @@ fn choose_backend() -> wgpu::Backends {
 }
 
 /// What the document picker returned that the game thread has not taken yet: a file descriptor this
-/// library now owns, or -1 when the player cancelled. Written on the UI thread, read in `poll_input`.
+/// library now owns, or -1 when the player canceled. Written on the UI thread, read in `poll_input`.
 static PICKED: Mutex<Option<i32>> = Mutex::new(None);
 
 /// `MainActivity.nativeImagePicked(fd)`, on the UI thread.
@@ -296,7 +296,7 @@ impl Platform for Android {
         }
         let picked = PICKED.lock().unwrap_or_else(|e| e.into_inner()).take();
         match picked {
-            // Cancelled: without an image there is nothing to play (as on the desktop).
+            // Canceled: without an image there is nothing to play (as on the desktop).
             Some(fd) if fd < 0 => self.exit = true,
             Some(fd) => match (&self.images, open_image(fd)) {
                 (Some(slot), Ok(image)) => slot.offer(image),

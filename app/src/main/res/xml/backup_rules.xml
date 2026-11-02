@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 11 and older (API 26-30): as data_extraction_rules.xml, the saves without the game data. -->
+<!-- Android 11 and older (API 26-30): the cloud backup of data_extraction_rules.xml, saves without the
+     game data (over the 25 MB limit). -->
 <full-backup-content>
     <exclude domain="file" path="game.pack" />
     <exclude domain="file" path="game.pack.tmp" />

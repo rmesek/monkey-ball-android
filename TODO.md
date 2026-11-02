@@ -85,7 +85,7 @@ monkey-ball-android/
 
 ## Na później
 
-- [ ] Czasami „blady” obraz po otwarciu aplikacji (kolory mniej nasycone). Nie udało się odtworzyć na emulatorze; wrócić, gdy będzie wiadomo kiedy występuje.
+- [x] Czasami „blady” obraz po otwarciu aplikacji: podświetlenie fokusu Androida nad widokiem gry (PROGRESS.md, krok 11).
 
 ## Etap 5: osobna aplikacja WebView (na koniec)
 

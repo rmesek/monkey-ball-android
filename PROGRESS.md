@@ -275,3 +275,25 @@ ustawi 100.
 Test `importsTheDiscImageAndShowsTheMenu` sprawdza teraz, że pierwszy zapis zawiera
 `setting music_volume 100` i `setting sfx_volume 100`. 8 z 8 testów przechodzi.
 
+## Krok 10: wydajność na emulatorze
+
+Gra na emulatorze wydawała się trochę wolna. Do sprawdzenia `native/src/lib.rs` co 5 s gry zapisuje w logcat
+linię `perf:` z czasami klatek. Liczy je `PerfStats` silnika, to samo, czego używa desktop.
+
+Pomiar: etap 1 (Beginner), około 25 s, emulator Pixel 9 (API 37, wyświetlacz 60 Hz) na komputerze z
+NVIDIA GeForce RTX 4080. Pierwsze 5 s pominięte, bo obejmują ładowanie etapu.
+
+| Wariant | FPS | Klatka p50 / p99 / najgorsza | Aktualizacja gry (śr.) | Renderowanie (śr.) |
+|---|---|---|---|---|
+| Emulator, Vulkan (GFXStream) | 59,6–60,0 | 16,7 / 19–28 / 20–35 ms | 0,21–0,28 ms | 16,4 ms |
+| Emulator, GLES (OpenGL ES Translator) | 25–27,5 | 35–39 / 44–52 / 54–59 ms | 3,9 ms | 32–36 ms |
+| Desktop, ten sam komputer, Vulkan (monitor 240 Hz) | 238,7 | 4,19 (śr.) / 4,47 / 51,6 ms | – | – |
+
+Wnioski:
+- **Vulkan na emulatorze trzyma 60 FPS**, czyli tyle, ile odświeża wyświetlacz emulatora. Czas „renderowania” około 16,4 ms to w większości czekanie na vsync (tryb `Fifo`), a nie praca GPU. Aktualizacja gry (fizyka, logika, HUD) zajmuje około 0,25 ms na klatkę, więc procesor ma ogromny zapas.
+- **p99 do 28 ms** to pojedyncze zacięcia. Na emulatorze typowe, bo obraz przechodzi przez warstwę GFXStream do GPU komputera i z powrotem do okna emulatora.
+- **GLES na emulatorze jest dwa razy wolniejszy.** Emulator tłumaczy GLES na OpenGL komputera, a silnik po każdym wysłaniu pracy do GPU czeka na jej zakończenie (`glFinish`, opisane w dokumentacji silnika jako świadomy wybór dla WebGL). To wariant zapasowy, używany tylko bez Vulkana.
+- **Port nie ma problemu z wydajnością**, który byłby widoczny na emulatorze. Odczucie „trochę wolno” to najpewniej sam emulator: 60 Hz zamiast 240 Hz monitora i dodatkowe opóźnienie wyświetlania. Rzeczywiste liczby da dopiero telefon (etap 4).
+
+Build release (`./gradlew assembleRelease`) składa się. APK bez podpisu ma 16,4 MB.
+

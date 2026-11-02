@@ -17,6 +17,7 @@ use std::path::Path;
 use std::rc::Rc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::time::{Duration, Instant};
 
 use jni::objects::JObject;
 use jni::{JNIEnv, JavaVM};
@@ -28,6 +29,7 @@ use mb_app::import::Importer;
 use mb_app::import_screen::{DiscImage, ImageSlot, ImportScreen};
 use mb_app::input::{Action, InputState};
 use mb_app::menu::Menu;
+use mb_app::perf::{FrameSample, PerfStats};
 use mb_app::ui::Insets;
 use mb_assets::disc::{DiscStream, FileStream};
 use mb_driver::Platform;
@@ -265,7 +267,13 @@ struct Android {
     nav_depth: u32,
     /// Cancel is held for one frame after a system "back"; released at the next `poll_input`.
     back_down: bool,
+    /// Frame timings of play, summed up in logcat every `PERF_PERIOD` (`perf:` lines).
+    perf: PerfStats,
+    perf_since: Option<Instant>,
 }
+
+/// How often the frame timings of play go to logcat.
+const PERF_PERIOD: Duration = Duration::from_secs(5);
 
 impl Android {
     fn start_picker(&mut self) {
@@ -369,6 +377,31 @@ Please pick another disc image."
         notify(&self.app, "onGameReady", gpu);
     }
 
+    fn on_frame(&mut self, sample: &FrameSample) {
+        self.perf.record(*sample);
+        let since = *self.perf_since.get_or_insert_with(Instant::now);
+        if since.elapsed() < PERF_PERIOD {
+            return;
+        }
+        let s = self.perf.summary();
+        log(
+            LOG_INFO,
+            &format!(
+                "perf: {} frames, {:.1} fps, frame p50 {:.1} p99 {:.1} worst {:.1} ms, update {:.2} render {:.2} ms avg, {} draws",
+                s.frames,
+                1000.0 / s.avg_ms.max(0.001),
+                s.p50_ms,
+                s.p99_ms,
+                s.worst_ms,
+                s.update_avg_ms,
+                s.render_avg_ms,
+                s.draws,
+            ),
+        );
+        self.perf.reset();
+        self.perf_since = None;
+    }
+
     fn restart_hint(&self) -> &'static str {
         "Open the game again to continue"
     }
@@ -427,6 +460,8 @@ fn run(app: AndroidApp) -> Result<(), String> {
         top: "",
         nav_depth: 0,
         back_down: false,
+        perf: PerfStats::new(),
+        perf_since: None,
     };
     log(LOG_INFO, &format!("backend: {:?}", platform.backends));
     let platform = mb_driver::run(event_loop, platform, host, content, initial)?;

@@ -100,8 +100,8 @@ class GameTest {
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         waitFor("the title menu", 30) { GameEvents.state == "menu" }
         // Course play -> Beginner -> start: Enter until a stage runs.
-        for (i in 0 until 8) {
-            if (GameEvents.state == "play") break
+        var presses = 0
+        while (GameEvents.state != "play" && presses++ < 8) {
             shell("input keyevent KEYCODE_ENTER")
             Thread.sleep(1500)
         }

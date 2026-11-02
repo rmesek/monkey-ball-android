@@ -1,5 +1,6 @@
 package io.github.rmesek.monkeyball
 
+import android.annotation.SuppressLint
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
@@ -25,13 +26,7 @@ class MainActivity : GameActivity() {
 
     /** The system's document picker. The chosen file goes to Rust as a file descriptor it then owns. */
     private val pickImage = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        val fd = uri?.let {
-            try {
-                contentResolver.openFileDescriptor(it, "r")?.detachFd()
-            } catch (e: Exception) {
-                null
-            }
-        }
+        val fd = uri?.let { runCatching { contentResolver.openFileDescriptor(it, "r")?.detachFd() }.getOrNull() }
         nativeImagePicked(fd ?: -1)
     }
 
@@ -64,7 +59,9 @@ class MainActivity : GameActivity() {
      * onDestroy waits for that thread: the app would hang, and the next start would stay on the splash
      * screen. The game runs once per process and saves as it goes, so end the process here; the next start
      * gets a fresh one. (The manifest's configChanges keep rotation and the like from destroying it.)
+     * Hence no super.onDestroy(): that is the call that would wait.
      */
+    @SuppressLint("MissingSuperCall")
     override fun onDestroy() {
         exitProcess(0)
     }
@@ -73,7 +70,7 @@ class MainActivity : GameActivity() {
      * Called from Rust (game thread, through JNI) when the import screen needs a disc image. The game has
      * no fonts before it has the image, so a dialog says what to pick and why; then the system's document
      * picker opens. Any file type there: .rvz and .gcm have no registered MIME type, and the game checks
-     * the content itself. Cancelling ends the game, as cancelling the picker does.
+     * the content itself. Canceling ends the game, as canceling the picker does.
      */
     @Suppress("unused")
     fun pickImage() = runOnUiThread {
@@ -140,7 +137,7 @@ class MainActivity : GameActivity() {
         return result
     }
 
-    /** The picked file's descriptor, or -1 when the player cancelled. Implemented in native/src/lib.rs. */
+    /** The picked file's descriptor, or -1 when the player canceled. Implemented in native/src/lib.rs. */
     private external fun nativeImagePicked(fd: Int)
 
     /** One step back inside the game (Cancel). Implemented in native/src/lib.rs. */

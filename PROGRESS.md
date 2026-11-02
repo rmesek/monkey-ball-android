@@ -396,3 +396,10 @@ testów przechodzi.
 Banany przy napisie MONKEY BALL: silnik rysuje je tylko wtedy, gdy obok napisu jest miejsce. W pionie napis
 zajmuje prawie całą szerokość, więc ich nie ma. W poziomie są, jak na desktopie (sprawdzone zrzutem).
 To zachowanie silnika, nie błąd portu. Decyzja: gra zostaje w obu orientacjach, bez blokady w manifeście.
+
+## Krok 15: sprawdzenie ręczne na emulatorze i APK na telefon
+
+- Dźwięk cichnie, gdy aplikacja jest w tle, i wraca po powrocie. Po powrocie słychać chwilami trzaski. Emulator często tak gra, więc rozstrzygnie dopiero telefon.
+- Joystick w grze działa. Aktywuje się tylko w lewej dolnej części ekranu: tak jest w silniku (`Layout::stick_zone` w `mb-app/src/ui.rs`, w poziomie lewe 45% szerokości, w pionie lewe 55% dolnych 40%). To nie błąd portu.
+- Poprawione ostrzeżenia IntelliJ: `onDestroy` celowo bez `super.onDestroy()` (to ono czeka na wątek gry), `@SuppressLint("MissingSuperCall")` z wyjaśnieniem; nieużywane parametry; pisownia „canceled”.
+- Na telefon idzie APK debug (`app/build/outputs/apk/debug/app-debug.apk`), instalowany ręcznie z pliku, bez debugowania USB. Kod Rusta jest w nim i tak budowany w profilu release, więc wydajność odpowiada wersji wydanej. APK ma biblioteki dla `arm64-v8a` (telefon) i `x86_64` (emulator).

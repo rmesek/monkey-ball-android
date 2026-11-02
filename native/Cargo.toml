@@ -1,0 +1,34 @@
+[package]
+name = "monkeyball"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+publish = false
+
+# libmonkeyball.so, loaded by GameActivity (AndroidManifest.xml, `android.app.lib_name`).
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# The game engine (git submodule at a tagged version).
+mb-app = { path = "../monkey-ball-rs/crates/mb-app" }
+mb-assets = { path = "../monkey-ball-rs/crates/mb-assets" }
+mb-driver = { path = "../monkey-ball-rs/crates/mb-driver" }
+mb-game = { path = "../monkey-ball-rs/crates/mb-game" }
+# The driver's winit, with the backend for AndroidX GameActivity.
+winit = { version = "0.30", features = ["android-game-activity"] }
+# The driver's wgpu and pollster: only to find out, before the driver starts, whether there is a Vulkan
+# adapter (`Platform::backends`). Same versions as the engine, so nothing new is built.
+wgpu = "30"
+pollster = "0.4"
+
+# Calls into the Kotlin activity (the document picker). The version cpal already uses on Android, so it
+# adds nothing to the build.
+[target.'cfg(target_os = "android")'.dependencies]
+jni = "0.21"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

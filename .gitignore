@@ -13,3 +13,7 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Rust: build output of native/ and the libraries cargo-ndk copies into the app.
+/native/target
+/app/src/main/jniLibs

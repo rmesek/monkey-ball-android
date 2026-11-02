@@ -10,6 +10,24 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.MonkeyBall" />
+        android:theme="@style/Theme.MonkeyBall">
+
+        <!-- The game. Rotation and resizing reach the Rust side as a new surface size instead of a new
+             activity: the engine runs once per process (see native/src/lib.rs). -->
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
+            android:exported="true"
+            android:launchMode="singleTask">
+            <!-- libmonkeyball.so, built from native/ -->
+            <meta-data
+                android:name="android.app.lib_name"
+                android:value="monkeyball" />
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
 
 </manifest>

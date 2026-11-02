@@ -12,6 +12,6 @@
 #}
 # Called by name from Rust through JNI (native/src/lib.rs).
 -keep class io.github.rmesek.monkeyball.MainActivity {
-    void pickImage();
+    public void *(...);
     native <methods>;
 }

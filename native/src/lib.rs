@@ -16,7 +16,7 @@ use std::os::fd::FromRawFd;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 
 use jni::objects::JObject;
 use jni::{JNIEnv, JavaVM};
@@ -26,7 +26,7 @@ use mb_app::game::Game;
 use mb_app::host::{Caps, Command, Host};
 use mb_app::import::Importer;
 use mb_app::import_screen::{DiscImage, ImageSlot, ImportScreen};
-use mb_app::input::InputState;
+use mb_app::input::{Action, InputState};
 use mb_app::menu::Menu;
 use mb_app::ui::Insets;
 use mb_assets::disc::{DiscStream, FileStream};
@@ -130,15 +130,70 @@ extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeInsets(
     }
 }
 
-/// Call a `void method()` of the activity (`MainActivity`) from the game thread.
-fn call_activity(app: &AndroidApp, method: &str) -> jni::errors::Result<()> {
+/// The system "back" (gesture or button), sent by the activity while the game has somewhere to go back
+/// to (`Game::nav_depth` above 0); taken in `poll_input` as one press of Cancel.
+static BACK: AtomicBool = AtomicBool::new(false);
+
+/// `MainActivity.nativeBack()`, on the UI thread.
+#[unsafe(no_mangle)]
+extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeBack(
+    _env: JNIEnv,
+    _this: JObject,
+) {
+    BACK.store(true, Ordering::Relaxed);
+}
+
+/// Call a method of the activity (`MainActivity`) from the game thread: `void method()`, or
+/// `void method(String)` with `text`.
+fn call_activity(app: &AndroidApp, method: &str, text: Option<&str>) -> jni::errors::Result<()> {
     // SAFETY: android-activity keeps the VM and a global reference to the activity valid while
     // `android_main` runs, which is the only time the game thread exists.
     let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) }?;
     let activity = unsafe { JObject::from_raw(app.activity_as_ptr().cast()) };
     let mut env = vm.attach_current_thread()?;
-    env.call_method(&activity, method, "()V", &[])?;
+    match text {
+        None => env.call_method(&activity, method, "()V", &[])?,
+        Some(text) => {
+            let text = env.new_string(text)?;
+            env.call_method(
+                &activity,
+                method,
+                "(Ljava/lang/String;)V",
+                &[(&text).into()],
+            )?
+        }
+    };
     Ok(())
+}
+
+/// `MainActivity.onNavDepth(depth)`: whether the system "back" stays in the game (above 0) or leaves it.
+fn report_nav_depth(app: &AndroidApp, depth: u32) {
+    let call = || -> jni::errors::Result<()> {
+        // SAFETY: as in `call_activity`.
+        let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) }?;
+        let activity = unsafe { JObject::from_raw(app.activity_as_ptr().cast()) };
+        let mut env = vm.attach_current_thread()?;
+        let depth = depth.min(i32::MAX as u32) as i32;
+        env.call_method(&activity, "onNavDepth", "(I)V", &[depth.into()])?;
+        Ok(())
+    };
+    if let Err(e) = call() {
+        log(
+            LOG_ERROR,
+            &format!("cannot call MainActivity.onNavDepth: {e}"),
+        );
+    }
+}
+
+/// Tell the activity something happened (`onGameReady`, `onGameState`, `onGameError`, `showMessage`).
+/// The activity logs it and keeps it for the instrumented tests; a failure here only costs the report.
+fn notify(app: &AndroidApp, method: &str, text: &str) {
+    if let Err(e) = call_activity(app, method, Some(text)) {
+        log(
+            LOG_ERROR,
+            &format!("cannot call MainActivity.{method}: {e}"),
+        );
+    }
 }
 
 /// Open the picked file as a disc image. `Importer::open` also checks that it is the game.
@@ -187,11 +242,17 @@ struct Android {
     exit: bool,
     /// The graphics backend, chosen once before the driver starts (`choose_backend`).
     backends: wgpu::Backends,
+    /// The name of the game state on top when the activity was last told (`import`, `menu`, `play`...).
+    top: &'static str,
+    /// `Game::nav_depth` of the state on top, as the activity was last told.
+    nav_depth: u32,
+    /// Cancel is held for one frame after a system "back"; released at the next `poll_input`.
+    back_down: bool,
 }
 
 impl Android {
     fn start_picker(&mut self) {
-        if let Err(e) = call_activity(&self.app, "pickImage") {
+        if let Err(e) = call_activity(&self.app, "pickImage", None) {
             log(LOG_ERROR, &format!("cannot open the document picker: {e}"));
             self.exit = true;
         }
@@ -199,7 +260,15 @@ impl Android {
 }
 
 impl Platform for Android {
-    fn poll_input(&mut self, _input: &mut InputState, host: &mut Host) {
+    fn poll_input(&mut self, input: &mut InputState, host: &mut Host) {
+        if self.back_down {
+            input.set_action(Action::Cancel, false);
+            self.back_down = false;
+        }
+        if BACK.swap(false, Ordering::Relaxed) {
+            input.set_action(Action::Cancel, true);
+            self.back_down = true;
+        }
         let picked = PICKED.lock().unwrap_or_else(|e| e.into_inner()).take();
         match picked {
             // Cancelled: without an image there is nothing to play (as on the desktop).
@@ -208,8 +277,17 @@ impl Platform for Android {
                 (Some(slot), Ok(image)) => slot.offer(image),
                 (None, Ok(_)) => {}
                 (_, Err(e)) => {
-                    // TODO(etap 2): tell the player (a toast) before asking again.
+                    // The import screen has no fonts before it has an image, so the activity says it.
                     log(LOG_ERROR, &format!("not a usable disc image: {e}"));
+                    notify(
+                        &self.app,
+                        "showMessage",
+                        &format!(
+                            "{e}
+
+Please pick another disc image."
+                        ),
+                    );
                     self.start_picker();
                 }
             },
@@ -248,6 +326,17 @@ impl Platform for Android {
         self.backends
     }
 
+    fn after_update(&mut self, _window: &Window, top: &dyn Game) {
+        if top.name() != self.top {
+            self.top = top.name();
+            notify(&self.app, "onGameState", self.top);
+        }
+        if top.nav_depth() != self.nav_depth {
+            self.nav_depth = top.nav_depth();
+            report_nav_depth(&self.app, self.nav_depth);
+        }
+    }
+
     fn wants_exit(&mut self) -> bool {
         self.exit
     }
@@ -259,6 +348,7 @@ impl Platform for Android {
 
     fn on_ready(&mut self, gpu: &str) {
         log(LOG_INFO, &format!("adapter: {gpu}"));
+        notify(&self.app, "onGameReady", gpu);
     }
 
     fn restart_hint(&self) -> &'static str {
@@ -267,6 +357,7 @@ impl Platform for Android {
 
     fn on_error(&mut self, msg: &str) {
         log(LOG_ERROR, &format!("error: {msg}"));
+        notify(&self.app, "onGameError", msg);
     }
 }
 
@@ -315,6 +406,9 @@ fn run(app: AndroidApp) -> Result<(), String> {
         remove_data: false,
         exit: false,
         backends: choose_backend(),
+        top: "",
+        nav_depth: 0,
+        back_down: false,
     };
     log(LOG_INFO, &format!("backend: {:?}", platform.backends));
     let platform = mb_driver::run(event_loop, platform, host, content, initial)?;

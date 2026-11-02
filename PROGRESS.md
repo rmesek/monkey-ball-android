@@ -177,3 +177,49 @@ Wyniki na emulatorze (zrzuty ekranu):
 - **Poziom** (obrót w trakcie etapu przez `settings put system user_rotation 1`): bez awarii, HUD odsunięty od wycięcia aparatu po lewej.
 - Smoke test (Vulkan) przechodzi, a `clippy` dla arm64 i x86_64 nie zgłasza ostrzeżeń.
 
+## 2026-11-02: testy instrumentacyjne, przycisk wstecz, tryb immersive, kopia zapasowa
+
+### Testy uruchamiane z Android Studio
+
+Skrypty `adb` (`scripts/`) zostały, ale główne testy to teraz testy instrumentacyjne JUnit w
+`app/src/androidTest/java/io/github/rmesek/monkeyball/GameTest.kt`.
+- **Uruchamianie:** zielona strzałka przy klasie albo przy teście w Android Studio, albo `./gradlew connectedDebugAndroidTest` (raport HTML w `app/build/reports/androidTests/connected/`).
+- **Jak testy widzą grę:** Rust zgłasza przez JNI do `MainActivity` gotowość GPU (`onGameReady`), zmianę stanu gry na wierzchu (`onGameState`: `import`, `menu`, `play`...), głębokość nawigacji (`onNavDepth`) i błędy (`onGameError`). `MainActivity` zapisuje to w obiekcie `GameEvents`, na który czekają testy.
+- **Każdy test w osobnym procesie (Android Test Orchestrator).** winit pozwala na jedną pętlę zdarzeń na proces, a `android_main` kończy proces. Kilka testów w jednym procesie nie mogłoby więc uruchomić gry ponownie.
+- **Picker systemowy:** obsługiwany przez `UiAutomation`, część Androida, bez UiAutomator czy Espresso. Wyszukiwanie elementów idzie przez drzewo dostępności, a stuknięcie przez `input tap`. `ACTION_CLICK` z dostępności nie działa na liście plików DocumentsUI: test czekał 180 s z otwartym pickerem.
+- **Backend:** testy ustawiają `debug.monkeyball.backend` przez `UiAutomation.executeShellCommand("setprop ...")`.
+- **Zależności testów** (nie trafiają do aplikacji): `androidx.test.ext:junit`, `androidx.test:runner` i `androidx.test:orchestrator`. Espresso i lokalne testy JUnit z szablonu usunięte.
+- **Uwaga:** `connectedDebugAndroidTest` po zakończeniu odinstalowuje aplikację razem z jej danymi, więc import robi się na nowo przy każdym przebiegu (około 4 s na emulatorze).
+
+| Test | Co sprawdza | Czas (emulator) |
+|---|---|---|
+| `firstStartAsksForTheDiscImage` | bez danych: GPU wstaje, ekran importu, otwiera się picker | 1,7 s |
+| `importsTheDiscImageAndShowsTheMenu` | wybór obrazu w pickerze, `game.pack` > 100 MB, stany `import` → `menu` | 4,5 s |
+| `laterStartsGoStraightToTheMenu` | z danymi: pierwszy stan to `menu` | 1,3 s |
+| `menuSystemBackStepsOutOfSubMenus` | Enter → podmenu (`nav_depth` > 0), systemowy wstecz → tytuł, aktywność dalej RESUMED | 1,8 s |
+| `startsOnGles` / `startsOnVulkan` | wymuszony backend, adapter zgłasza `(Gl, ...)` / `(Vulkan, ...)` | 1,1 s |
+
+Wynik: 6 z 6 testów przechodzi. Testy, które potrzebują obrazu płyty, są pomijane (a nie oblane), gdy obrazu nie ma na urządzeniu.
+
+### Systemowy przycisk wstecz
+
+Przy targetSdk 37 (predictive back) przycisk wstecz nie trafia do gry jako klawisz: AppCompat zamykał aktywność nawet z podmenu.
+
+Rozwiązanie wzorowane na wersji przeglądarkowej:
+- Silnik podaje `Game::nav_depth`, czyli liczbę kroków do ekranu tytułowego.
+- Rust zgłasza ją do Kotlina, a `OnBackPressedCallback` jest włączony tylko przy głębokości większej od zera.
+- Wtedy wstecz trafia do gry (`nativeBack`) jako jedno naciśnięcie `Cancel`.
+- Na ekranie tytułowym wstecz działa jak w każdej aplikacji i ją zamyka.
+
+### Tryb immersive
+
+`WindowInsetsControllerCompat.hide(systemBars())`, z pokazywaniem pasków na chwilę po przeciągnięciu od krawędzi. Wcięcia z poprzedniego wpisu działają dalej: przy ukrytych paskach zostaje tylko wycięcie aparatu.
+
+### Kopia zapasowa
+
+`data_extraction_rules.xml` (Android 12+) i `backup_rules.xml` (starsze) wyłączają `game.pack` i `game.pack.tmp` z kopii w chmurze i z przenoszenia na nowy telefon. Zapisy zostają w kopii.
+
+### Komunikat przy złym pliku
+
+Ekran importu nie ma czcionek, dopóki nie dostanie obrazu, więc o złym pliku mówi aktywność: toast (`showMessage`), a potem ponowny wybór. Na złym pliku jeszcze nie sprawdzone.
+

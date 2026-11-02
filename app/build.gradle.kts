@@ -20,6 +20,12 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    // Instrumented tests (app/src/androidTest): each in a process of its own, because the engine runs once
+    // per process (native/src/lib.rs).
+    testOptions {
+        execution = "ANDROIDX_TEST_ORCHESTRATOR"
+    }
+
     buildTypes {
         release {
             optimization {
@@ -54,7 +60,9 @@ dependencies {
     implementation(libs.games.activity)
     // Its base class and the Theme.AppCompat the activity uses; games-activity brings it anyway.
     implementation(libs.androidx.appcompat)
-    testImplementation(libs.junit)
-    androidTestImplementation(libs.androidx.espresso.core)
+    // Instrumented tests only (not in the app): JUnit 4 on Android, ActivityScenario, the runner, and the
+    // orchestrator that gives each test its own process.
     androidTestImplementation(libs.androidx.junit)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestUtil(libs.androidx.test.orchestrator)
 }

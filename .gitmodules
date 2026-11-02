@@ -1,0 +1,3 @@
+[submodule "monkey-ball-rs"]
+	path = monkey-ball-rs
+	url = git@github.com:rmesek/monkey-ball-rs.git

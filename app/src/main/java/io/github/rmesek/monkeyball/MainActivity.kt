@@ -45,6 +45,10 @@ class MainActivity : GameActivity() {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onBackPressedDispatcher.addCallback(this, back)
+        // The game's view has the focus and fills the screen. Without this, Android draws its translucent
+        // focus highlight over all of it whenever the device is in keyboard (non-touch) mode: the game
+        // looks pale.
+        mSurfaceView.defaultFocusHighlightEnabled = false
         // Immersive: the game gets the whole screen; a swipe from the edge shows the bars for a moment.
         WindowCompat.getInsetsController(window, window.decorView).apply {
             hide(WindowInsetsCompat.Type.systemBars())

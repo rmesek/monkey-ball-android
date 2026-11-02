@@ -297,3 +297,31 @@ Wnioski:
 
 Build release (`./gradlew assembleRelease`) składa się. APK bez podpisu ma 16,4 MB.
 
+## Krok 11: „blady” obraz
+
+Objaw: po otwarciu aplikacji kolory gry były czasami mniej nasycone. Przy zimnym starcie, powrocie z tła i
+w przejściach menu nie dało się tego wywołać. Pojawiło się po tym, jak testy zostawiły otwarty picker,
+a Ty wybrałeś w nim plik.
+
+Diagnoza:
+- Tło menu miało kolor (35, 47, 85) zamiast (5, 18, 61). To dokładnie gra przykryta białą warstwą o krycie około 12%.
+- `dumpsys SurfaceFlinger`: w stanie bladym okno aktywności, które leży nad powierzchnią gry (`SurfaceView`), miało treść na całym ekranie. W normalnym stanie jest całe przezroczyste i nie trafia do kompozycji.
+- `dumpsys activity`: okno zawiera tylko `GameActivity$InputEnabledSurfaceView` i ten widok ma fokus.
+- Odtworzenie za każdym razem: gra w tle, dowolny klawisz (urządzenie przechodzi w tryb klawiatury, wychodzi z trybu dotyku), powrót do gry.
+
+Przyczyna: od Androida 8 system rysuje nad widokiem z fokusem półprzezroczyste podświetlenie
+(`defaultFocusHighlight`), gdy urządzenie jest w trybie klawiatury. Widok gry ma fokus (potrzebny do
+klawiszy) i zajmuje cały ekran, więc podświetlenie przykrywało całą grę. Na emulatorze tryb klawiatury
+włączają klawiatura komputera i `adb shell input keyevent`, z którego korzystają testy. Stąd „czasami”.
+
+Poprawka: jedna linia w `MainActivity.onCreate`, `mSurfaceView.defaultFocusHighlightEnabled = false`.
+Sprawdzone ręcznie: bez poprawki obraz był blady za każdym razem, z poprawką dwa razy z rzędu prawidłowy.
+
+Test automatyczny nie pomógł. Ten sam przebieg w teście instrumentacyjnym (także z
+`setInTouchMode(false)`) przechodził również bez poprawki, bo w środowisku testowym efekt się nie
+pojawia. Test, który niczego nie wykrywa, został usunięty.
+
+Przy okazji widać było osobną rzecz. Instalacja nowej wersji przy otwartej aplikacji (Run w Android Studio)
+potrafi odtworzyć starą aktywność w nowym procesie i zostawić czarny ekran. Dotyczy to tylko
+reinstalacji w trakcie pracy, nie zwykłego używania. Ponowne uruchomienie pomaga.
+

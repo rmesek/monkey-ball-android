@@ -36,3 +36,4 @@ Opcjonalne:
 | 2026-11-02 | Testy automatyczne uruchamiane z Android Studio; systemowy przycisk wstecz, tryb pełnoekranowy, kopia zapasowa |
 | 2026-11-02 | Testy powrotu z tła i wyboru złego pliku; sprawdzenie usuwania danych gry |
 | 2026-11-02 | Pełna głośność dźwięku na telefonie; pomiar wydajności na emulatorze (60 FPS przez Vulkan) |
+| 2026-11-02 | Naprawa „bladego” obrazu po powrocie do gry (podświetlenie fokusu Androida) |

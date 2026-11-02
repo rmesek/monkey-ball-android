@@ -58,7 +58,7 @@ monkey-ball-android/
 - [ ] Dotyk i przycisk wstecz. Dotyk w menu działa na emulatorze; systemowy wstecz cofa w grze (`nav_depth`), test `menuSystemBackStepsOutOfSubMenus`. Sprawdzić sterowanie kulką na telefonie.
 - [x] Ekran zawsze włączony (`FLAG_KEEP_SCREEN_ON`) i tryb immersive.
 - [x] Wycięcia ekranu (`Platform::insets`): z Kotlina (`onApplyWindowInsets`), paski systemowe i wycięcie aparatu.
-- [x] `dataExtractionRules` i `backup_rules`: `game.pack` poza kopią zapasową i przenosinami na nowy telefon, zapisy zostają.
+- [x] `dataExtractionRules` i `backup_rules`: `game.pack` przenoszony na nowy telefon, ale poza kopią w chmurze (limit 25 MB); zapisy wszędzie.
 - [ ] Sprawdzić odtwarzanie powierzchni po wyjściu z aplikacji i powrocie (obrót w trakcie etapu działa na emulatorze).
 - [x] Fallback na GLES, gdy Vulkan nie działa (`Platform::backends`): Vulkan, gdy jest adapter, inaczej GLES; wymuszenie przez `debug.monkeyball.backend`.
 

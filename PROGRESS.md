@@ -217,7 +217,11 @@ Rozwiązanie wzorowane na wersji przeglądarkowej:
 
 ### Kopia zapasowa
 
-`data_extraction_rules.xml` (Android 12+) i `backup_rules.xml` (starsze) wyłączają `game.pack` i `game.pack.tmp` z kopii w chmurze i z przenoszenia na nowy telefon. Zapisy zostają w kopii.
+Przy przenoszeniu na nowy telefon (`device-transfer`) aplikacja przenosi wszystko, razem z `game.pack`, więc na nowym telefonie nie trzeba importować ponownie.
+
+Kopia w chmurze (`cloud-backup` oraz `backup_rules.xml` dla Androida 11 i starszych) pomija `game.pack`. Auto Backup ma limit 25 MB na aplikację, a po jego przekroczeniu przestaje robić kopię całej aplikacji, razem z zapisami gry.
+
+Niedokończony import (`game.pack.tmp`) jest pomijany wszędzie.
 
 ### Komunikat przy złym pliku
 

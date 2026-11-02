@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Android 12+ (API 31+). The saves (small files in files/) are backed up and moved to a new phone; the
-     imported game data (files/game.pack, 144 MB, and its .tmp while an import runs) is not: it is far over
-     the cloud backup's size limit and can be imported again from the disc image. -->
+<!-- Android 12+ (API 31+). Moving to a new phone takes everything, the imported game data included
+     (files/game.pack, 144 MB), so the new phone needs no import. The cloud backup leaves the game data out:
+     it allows 25 MB per app and stops backing up the whole app, saves included, when that is exceeded. The
+     .tmp is an unfinished import, never worth keeping. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="file" path="game.pack" />
         <exclude domain="file" path="game.pack.tmp" />
     </cloud-backup>
     <device-transfer>
-        <exclude domain="file" path="game.pack" />
         <exclude domain="file" path="game.pack.tmp" />
     </device-transfer>
 </data-extraction-rules>

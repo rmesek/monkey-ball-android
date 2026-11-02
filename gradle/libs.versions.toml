@@ -3,16 +3,16 @@ agp = "9.5.0"
 # The version the Rust side's android-activity 0.6 is written against (its README); upgrade them together.
 gamesActivity = "4.4.0"
 appcompat = "1.8.0"
-junit = "4.13.2"
 junitVersion = "1.3.0"
-espressoCore = "3.7.0"
+testRunner = "1.7.0"
+orchestrator = "1.6.1"
 
 [libraries]
 games-activity = { group = "androidx.games", name = "games-activity", version.ref = "gamesActivity" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
-junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
-androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
+androidx-test-runner = { group = "androidx.test", name = "runner", version.ref = "testRunner" }
+androidx-test-orchestrator = { group = "androidx.test", name = "orchestrator", version.ref = "orchestrator" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

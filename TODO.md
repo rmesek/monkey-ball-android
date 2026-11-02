@@ -73,6 +73,7 @@ monkey-ball-android/
   - Z `getRotationMatrixFromVector` i `getOrientation` wyznaczyć beta i gamma w stopniach oraz obrót ekranu.
   - Wartości trafiają przez `external fun nativeTilt(...)` do zmiennych atomowych, a w `poll_input` do `TiltSteering`.
   - Ustawić `Caps::tilt`.
+- [ ] Gdy sterowanie żyroskopem jest włączone, ekran nie może się obracać: zablokować bieżącą orientację (np. `requestedOrientation = SCREEN_ORIENTATION_LOCKED`) i odblokować po powrocie do sterowania dotykiem.
 
 ## Etap 4: pomiary wariantu natywnego (opcjonalne)
 

@@ -44,7 +44,7 @@ class GameTest {
         ActivityScenario.launch(MainActivity::class.java)
         waitFor("the GPU", 30) { GameEvents.adapter != null }
         waitFor("the import screen", 10) { GameEvents.state == "import" }
-        waitFor("the document picker", 10) { pickerShown() }
+        openPicker()
         assertNoErrors()
     }
 
@@ -130,12 +130,14 @@ class GameTest {
         shell("content call --uri content://media/external/file --method scan_file --arg $bad")
         try {
             ActivityScenario.launch(MainActivity::class.java)
-            waitFor("the document picker", 30) { pickerShown() }
+            openPicker()
             val file = waitForNode(10) { find { it.text?.toString() == "not-a-disc-image.iso" } }
             assumeTrue("the test file is not shown in the picker", file != null)
             click(file!!)
-            waitFor("a message to the player", 20) { GameEvents.messages.isNotEmpty() }
-            waitFor("the document picker again", 10) { pickerShown() }
+            waitFor("the file refused", 20) { GameEvents.messages.isNotEmpty() }
+            waitFor("the reason, before the picker opens again", 10) {
+                find { it.text?.toString() == "This file cannot be used" } != null && chooseButton() != null
+            }
             assertEquals("still importing", "import", GameEvents.state)
             assertTrue("no game data", !pack.exists())
             assertNoErrors()
@@ -185,7 +187,7 @@ class GameTest {
 
     /** With the import screen asking: pick the disc image in the document picker, wait for the menu. */
     private fun importDiscImage() {
-        waitFor("the document picker", 30) { pickerShown() }
+        openPicker()
         var image = findImage()
         if (image == null) {
             // Not in the folder the picker opened with: try Downloads.
@@ -202,6 +204,18 @@ class GameTest {
     private fun findImage() = find {
         val name = it.text?.toString()?.lowercase() ?: return@find false
         name.endsWith(".rvz") || name.endsWith(".iso") || name.endsWith(".gcm")
+    }
+
+    /** The dialog before the picker: its "Choose file" button, once it is shown. */
+    private fun chooseButton() = find { it.text?.toString().equals("Choose file", ignoreCase = true) }
+
+    /** The import screen asks: the explanation comes first, then the document picker. */
+    private fun openPicker() {
+        val choose = waitForNode(30) { chooseButton() }
+        assertTrue("no explanation before the document picker", choose != null)
+        click(choose!!)
+        waitFor("the document picker", 10) { pickerShown() }
+        Thread.sleep(1500) // its opening animation: taps during it are lost
     }
 
     private fun pickerShown() =

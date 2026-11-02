@@ -1,3 +1,10 @@
 <resources>
     <string name="app_name">Monkey Ball</string>
+
+    <!-- Before the document picker, at the first start (the game has no fonts until it has the image). -->
+    <string name="pick_image_title">Choose the game file</string>
+    <string name="pick_image_message">Pick your Super Monkey Ball disc image, for example \"Super Monkey Ball (USA).rvz\": a copy of the Nintendo GameCube game disc (RVZ, ISO or GCM).</string>
+    <string name="pick_image_choose">Choose file</string>
+    <!-- When the picked file is not the game: the game's own reason follows as the message. -->
+    <string name="pick_image_refused_title">This file cannot be used</string>
 </resources>

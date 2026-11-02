@@ -189,7 +189,7 @@ fn report_nav_depth(app: &AndroidApp, depth: u32) {
     }
 }
 
-/// Tell the activity something happened (`onGameReady`, `onGameState`, `onGameError`, `showMessage`).
+/// Tell the activity something happened (`onGameReady`, `onGameState`, `onGameError`, `onImageRefused`).
 /// The activity logs it and keeps it for the instrumented tests; a failure here only costs the report.
 fn notify(app: &AndroidApp, method: &str, text: &str) {
     if let Err(e) = call_activity(app, method, Some(text)) {
@@ -302,17 +302,10 @@ impl Platform for Android {
                 (Some(slot), Ok(image)) => slot.offer(image),
                 (None, Ok(_)) => {}
                 (_, Err(e)) => {
-                    // The import screen has no fonts before it has an image, so the activity says it.
+                    // The import screen has no fonts before it has an image, so the activity says it, in
+                    // the dialog before the picker opens again.
                     log(LOG_ERROR, &format!("not a usable disc image: {e}"));
-                    notify(
-                        &self.app,
-                        "showMessage",
-                        &format!(
-                            "{e}
-
-Please pick another disc image."
-                        ),
-                    );
+                    notify(&self.app, "onImageRefused", &e);
                     self.start_picker();
                 }
             },

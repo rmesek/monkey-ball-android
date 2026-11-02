@@ -6,6 +6,7 @@ import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -69,11 +70,22 @@ class MainActivity : GameActivity() {
     }
 
     /**
-     * Called from Rust (game thread, through JNI) when the import screen needs a disc image. Any file type:
-     * .rvz and .gcm have no registered MIME type, and the game checks the content itself.
+     * Called from Rust (game thread, through JNI) when the import screen needs a disc image. The game has
+     * no fonts before it has the image, so a dialog says what to pick and why; then the system's document
+     * picker opens. Any file type there: .rvz and .gcm have no registered MIME type, and the game checks
+     * the content itself. Cancelling ends the game, as cancelling the picker does.
      */
     @Suppress("unused")
-    fun pickImage() = runOnUiThread { pickImage.launch(arrayOf("*/*")) }
+    fun pickImage() = runOnUiThread {
+        val reason = refused.also { refused = null }
+        AlertDialog.Builder(this)
+            .setTitle(if (reason == null) R.string.pick_image_title else R.string.pick_image_refused_title)
+            .setMessage(reason ?: getString(R.string.pick_image_message))
+            .setPositiveButton(R.string.pick_image_choose) { _, _ -> pickImage.launch(arrayOf("*/*")) }
+            .setNegativeButton(android.R.string.cancel) { _, _ -> nativeImagePicked(-1) }
+            .setOnCancelListener { nativeImagePicked(-1) }
+            .show()
+    }
 
     // Reports from Rust (game thread, through JNI). Kept in GameEvents for the instrumented tests.
 
@@ -100,13 +112,18 @@ class MainActivity : GameActivity() {
     @Suppress("unused")
     fun onGameError(message: String) {
         GameEvents.errors.add(message)
-        showMessage(message)
+        runOnUiThread { Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
     }
 
-    /** Something to tell the player that the game cannot draw itself (it has no fonts before the import). */
-    fun showMessage(message: String) {
-        GameEvents.messages.add(message)
-        runOnUiThread { Toast.makeText(this, message, Toast.LENGTH_LONG).show() }
+    /** Why the file just picked cannot be used; the next pickImage dialog says it. */
+    @Volatile
+    private var refused: String? = null
+
+    /** The picked file is not the game (called just before pickImage asks again). */
+    @Suppress("unused")
+    fun onImageRefused(reason: String) {
+        GameEvents.messages.add(reason)
+        refused = reason
     }
 
     /**

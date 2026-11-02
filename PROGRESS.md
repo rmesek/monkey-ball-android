@@ -123,4 +123,30 @@ Wyniki na emulatorze (Pixel 9, API 37, host z NVIDIA GeForce RTX 4080):
 | auto, wybrał Vulkan | Goldfish GFXStream (NVIDIA GeForce RTX 4080), Vulkan, VirtualGpu | działa, otwiera się wybór pliku |
 | wymuszony GL | Android Emulator OpenGL ES Translator, GL | działa |
 
-Jeszcze nie sprawdzone: telefon, dotyk, dźwięk, import obrazu płyty.
+Jeszcze nie sprawdzone w tym wpisie: telefon, dotyk, dźwięk, import obrazu płyty (patrz następny wpis).
+
+## 2026-11-02: import obrazu płyty i pierwsza rozgrywka na emulatorze
+
+Obraz `Super Monkey Ball (USA).rvz` (475 MB) wgrany do `Download` na emulatorze. Systemowy wybór pliku
+obsłużony z komputera: `uiautomator dump` podaje położenie pliku, a `adb shell input tap` w niego stuka.
+
+Sprawdzone na emulatorze (Pixel 9, API 37, Vulkan przez GFXStream):
+
+| Co | Wynik |
+|---|---|
+| Wybór pliku, przekazanie deskryptora do Rusta, `Importer::open` | działa: plik rozpoznany jako gra |
+| Import do pamięci aplikacji | `files/game.pack`, 144 099 740 B; trwał poniżej 6 s (ekran importu zniknął przed pierwszym zrzutem po 6 s) |
+| Menu tytułowe po imporcie | wyświetla się, czcionki i grafika z obrazu płyty |
+| Dotyk w menu (`adb shell input tap`) | działa: PRACTICE → BEGINNER → 1 PLAIN |
+| Etap 1 (PLAIN) | renderuje się w 3D: plansza, niebo, kulka, HUD (wynik, czas, banany), wirtualna gałka i pauza |
+| Ponowny start | od razu menu, bez pytania o plik; `am start -W`: TotalTime 584 ms |
+| Pamięć w trakcie etapu 1 (`dumpsys meminfo`) | TOTAL PSS 84,4 MB, z tego Native Heap 43,3 MB |
+
+Znalezione problemy:
+- Elementy przy górnej krawędzi (przycisk wstecz w menu, wynik w HUD) wchodzą pod pasek stanu. Gra nie
+  zna jeszcze wcięć ekranu (`Platform::insets`). Do zrobienia w etapie 2.
+- Pasek podpowiedzi w menu pokazuje klawisze (ARROWS / ENTER / ESC), bo emulator zgłasza klawiaturę
+  sprzętową. Na telefonie bez klawiatury powinny być podpowiedzi dotykowe; do sprawdzenia.
+
+Jeszcze nie sprawdzone: telefon, dźwięk (emulator otwiera strumień AAudio, ale odsłuchu nie było),
+sterowanie kulką, gest wstecz, wyjście do tła i powrót, obrót ekranu.

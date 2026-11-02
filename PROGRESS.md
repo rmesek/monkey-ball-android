@@ -261,3 +261,17 @@ Usunięte skrypty `scripts/smoke-test.sh` i `scripts/import-image.sh` (kroki 3 i
 instrumentacyjne `GameTest`, czyli start gry na obu backendach i import obrazu przez picker, ale tylko z linii
 poleceń i przez `adb`. Testy JUnit uruchamia się z Android Studio, więc druga droga była zbędna.
 
+## Krok 9: pełna głośność na telefonie
+
+Silnik ustawia domyślnie muzykę i efekty na 80, co pasuje do komputera. Na emulatorze gra była za cicha.
+Na telefonie głośność reguluje się przyciskami systemu, więc gra startuje z obiema wartościami na 100.
+
+Silnik się nie zmienia. `native/src/lib.rs` przy pierwszym starcie, gdy nie ma jeszcze zapisu (klucz
+`profile`), zapisuje profil domyślny z głośnościami 100. Późniejsze zmiany w opcjach gry zostają, bo zapis
+już istnieje. Wyjątek: „Erase save data” w opcjach usuwa zapis i od razu przywraca ustawienia silnika (80).
+Jeśli gra przed zamknięciem coś zapisze (np. ukończony etap), 80 zostaje. Jeśli nie, następny start znów
+ustawi 100.
+
+Test `importsTheDiscImageAndShowsTheMenu` sprawdza teraz, że pierwszy zapis zawiera
+`setting music_volume 100` i `setting sfx_volume 100`. 8 z 8 testów przechodzi.
+

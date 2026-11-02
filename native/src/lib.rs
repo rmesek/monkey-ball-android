@@ -31,7 +31,9 @@ use mb_app::menu::Menu;
 use mb_app::ui::Insets;
 use mb_assets::disc::{DiscStream, FileStream};
 use mb_driver::Platform;
-use mb_game::{FileStorage, SlotStorage};
+use mb_game::progress::PROFILE_KEY;
+use mb_game::storage::Storage;
+use mb_game::{FileStorage, Profile, SlotStorage};
 use winit::event_loop::EventLoop;
 use winit::platform::android::EventLoopBuilderExtAndroid;
 use winit::platform::android::activity::AndroidApp;
@@ -223,6 +225,21 @@ fn stored_pack(pack: &Path) -> Option<(Content, String, u64)> {
     }
 }
 
+/// Full music and sound volume on a phone, where the system's volume keys are the usual control (the engine
+/// starts at 80 for the desktop). Written once, as the first save, when there is none yet: what the player
+/// changes in Options afterwards is kept.
+fn first_settings(storage: &mut dyn Storage) {
+    if !matches!(storage.read(PROFILE_KEY), Ok(None)) {
+        return;
+    }
+    let mut profile = Profile::default();
+    profile.settings.music_volume = 100;
+    profile.settings.sfx_volume = 100;
+    if let Err(e) = profile.save(storage) {
+        log(LOG_ERROR, &format!("cannot write the first settings: {e}"));
+    }
+}
+
 /// The options screen's lines on what is kept on the device.
 fn info(pack_len: Option<u64>) -> Vec<String> {
     let mut lines: Vec<String> = (pack_len.into_iter())
@@ -371,9 +388,9 @@ fn run(app: AndroidApp) -> Result<(), String> {
         .build()
         .map_err(|e| format!("event loop: {e}"))?;
     let audio = Audio::new(Box::new(mb_app::audio_cpal::CpalBackend::new()));
-    let menu: Box<dyn Game> = Box::new(
-        Menu::new(Box::new(SlotStorage::new(FileStorage::new(&dir)))).with_audio(audio.clone()),
-    );
+    let mut storage = SlotStorage::new(FileStorage::new(&dir));
+    first_settings(&mut storage);
+    let menu: Box<dyn Game> = Box::new(Menu::new(Box::new(storage)).with_audio(audio.clone()));
     // The system closes apps: no "Quit" on the title. The game data can be removed from the options.
     let mut host = Host::new(
         Caps {

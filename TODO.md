@@ -37,7 +37,7 @@ monkey-ball-android/
 - [x] `MainActivity : GameActivity` oraz `meta-data android.app.lib_name = monkeyball`, motyw `Theme.AppCompat.NoActionBar`.
 - [x] `native/` z `android_main`, które uruchamia grę na ekranie importu (`LatePack` z `ImportScreen`).
 - [x] Zadanie Gradle `cargoNdk` uruchamiane przed `preBuild` i budujące do `app/src/main/jniLibs/`.
-- [ ] APK instaluje się i uruchamia na emulatorze (zrobione, `scripts/smoke-test.sh`) i na telefonie. Logi czytane w Logcat.
+- [ ] APK instaluje się i uruchamia na emulatorze (zrobione, testy `GameTest`) i na telefonie. Logi czytane w Logcat.
 
 ## Etap 2: gra natywnie (wymagania obowiązkowe)
 

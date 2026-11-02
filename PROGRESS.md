@@ -255,3 +255,9 @@ Ekran opcji pokazuje „GAME DATA: 137 MB” (144 099 740 B) i „KEPT WITH THE 
 
 Rust loguje też każdą zmianę stanu gry (`state: import`, `state: menu`, `state: play`), co ułatwia czytanie logcat.
 
+## Krok 8: uproszczenie
+
+Usunięte skrypty `scripts/smoke-test.sh` i `scripts/import-image.sh` (kroki 3 i 5). Robiły to samo co testy
+instrumentacyjne `GameTest`, czyli start gry na obu backendach i import obrazu przez picker, ale tylko z linii
+poleceń i przez `adb`. Testy JUnit uruchamia się z Android Studio, więc druga droga była zbędna.
+

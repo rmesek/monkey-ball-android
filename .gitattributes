@@ -1,3 +1,2 @@
-# Shell scripts run by bash (Git Bash on Windows too): LF only, whatever core.autocrlf says.
-*.sh text eol=lf
+# The Gradle wrapper script runs under sh (Linux, macOS, Git Bash): LF only, whatever core.autocrlf says.
 gradlew text eol=lf

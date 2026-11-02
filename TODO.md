@@ -37,7 +37,7 @@ monkey-ball-android/
 - [x] `MainActivity : GameActivity` oraz `meta-data android.app.lib_name = monkeyball`, motyw `Theme.AppCompat.NoActionBar`.
 - [x] `native/` z `android_main`, które uruchamia grę na ekranie importu (`LatePack` z `ImportScreen`).
 - [x] Zadanie Gradle `cargoNdk` uruchamiane przed `preBuild` i budujące do `app/src/main/jniLibs/`.
-- [ ] APK instaluje się i uruchamia na emulatorze (zrobione, testy `GameTest`) i na telefonie (APK debug instalowany ręcznie, bez USB). Na telefonie sprawdzić też: dźwięk bez trzasków po powrocie z tła, sterowanie kulką.
+- [x] APK instaluje się i uruchamia na emulatorze (testy `GameTest`) i na telefonie (APK debug instalowany ręcznie, bez USB; dźwięk i sterowanie kulką sprawdzone ręcznie).
 
 ## Etap 2: gra natywnie (wymagania obowiązkowe)
 
@@ -54,7 +54,7 @@ monkey-ball-android/
   3. Przy następnym `poll_input` deskryptor trafia do `Importer::open` i do `ImageSlot`.
   4. Błąd: toast i ponowny wybór.
 - [x] `Command::RemoveGameData`: zakończ grę i usuń `game.pack` (sprawdzone ręcznie na emulatorze).
-- [x] Dźwięk: `audio_cpal` (AAudio), zawieszany w `on_visible(false)` (sprawdzone ręcznie na emulatorze; trzaski po powrocie z tła do sprawdzenia na telefonie).
+- [x] Dźwięk: `audio_cpal` (AAudio), zawieszany w `on_visible(false)` (sprawdzone ręcznie na emulatorze i telefonie; trzaski po powrocie z tła były tylko na emulatorze).
 - [x] Dotyk i przycisk wstecz: dotyk w menu i joystick w grze działają na emulatorze (sprawdzone ręcznie); systemowy wstecz cofa w grze (`nav_depth`), test `menuSystemBackStepsOutOfSubMenus`.
 - [x] Ekran zawsze włączony (`FLAG_KEEP_SCREEN_ON`) i tryb immersive.
 - [x] Wycięcia ekranu (`Platform::insets`): z Kotlina (`onApplyWindowInsets`), paski systemowe i wycięcie aparatu.

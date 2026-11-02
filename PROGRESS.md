@@ -360,6 +360,7 @@ linie `perf:` co 5 s):
 | Teraz, bez linii z podświetleniem fokusu (A/B) | 24–25 | 35–42 / 74 ms | 8,7–9,7 ms | 31–32 ms |
 | Po restarcie systemu emulatora (pierwsze minuty) | 16–19 | 48–57 / 109–160 ms | 9–25 ms | 37–45 ms |
 | 2 minuty po restarcie | 26–27 | 36–43 / 62–80 ms | 8,6–10 ms | 27–29 ms |
+| **Emulator w osobnym oknie** (poza panelem Android Studio), 2 minuty po starcie | **60** | 16,6 / 18,4–18,7 ms | 0,15–0,17 ms | 16,5 ms |
 
 Co wiadomo:
 - **Kod gry się nie zmienił:** od commita `2622ef8` (pomiar z 60 FPS) zmienił się tylko `MainActivity.kt` (16 linii). `native/` jest bez zmian.
@@ -368,8 +369,11 @@ Co wiadomo:
 - **Pętla w powłoce emulatora** (300 000 iteracji, niezależna od gry) trwała 414 ms przed restartem, 973 ms tuż po restarcie i 429 ms dwie minuty później. Szybkość emulatora mocno się waha, a wraz z nią czas aktualizacji gry.
 - **Komputer** był obciążony w około 20%.
 
-Wniosek: spadek z 60 do około 25 FPS wynika ze stanu emulatora, a nie z portu. Najbardziej prawdopodobna
-przyczyna to wyświetlanie emulatora w panelu Running Devices Android Studio. Android Studio pobiera wtedy
-każdą klatkę z GPU emulatora, co obciąża GPU i procesor emulatora. Wiarygodne liczby da dopiero telefon
-(etap 4).
+Wniosek: spadek z 60 do około 25 FPS wynika z emulatora, a nie z portu. Potwierdza to ostatni wiersz tabeli.
+Ten sam APK w emulatorze uruchomionym jako osobne okno (`emulator -avd Pixel_9`) wraca do stałych 60 FPS
+z aktualizacją gry 0,16 ms. W panelu Running Devices Android Studio pobiera każdą klatkę z GPU emulatora,
+żeby ją pokazać, i to spowalnia emulator mniej więcej o połowę.
+
+Do pomiarów i do grania na emulatorze lepiej używać osobnego okna emulatora (w Device Manager: „Launch in a
+tool window” wyłączone albo uruchomienie z linii poleceń). Wiarygodne liczby da dopiero telefon (etap 4).
 

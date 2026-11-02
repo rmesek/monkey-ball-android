@@ -150,3 +150,30 @@ Znalezione problemy:
 
 Jeszcze nie sprawdzone: telefon, dźwięk (emulator otwiera strumień AAudio, ale odsłuchu nie było),
 sterowanie kulką, gest wstecz, wyjście do tła i powrót, obrót ekranu.
+
+## 2026-11-02: wcięcia ekranu (paski systemowe, wycięcie aparatu)
+
+Problem: przy `targetSdk` 35+ okno zajmuje cały ekran, od krawędzi do krawędzi, pod paskiem stanu i paskiem nawigacji. Gra rysowała przycisk wstecz i wynik w HUD pod paskiem stanu.
+
+Skąd wziąć wcięcia:
+- `android-activity` 0.6 ich nie udostępnia.
+- `AndroidApp::content_rect()` obejmuje cały ekran (logcat: `ContentRectChanged (0 0) (1080 2424)`).
+- Klasa `GameActivity` sama implementuje `OnApplyWindowInsetsListener` (sprawdzone przez `javap` na `classes.jar` z `games-activity` 4.4.0).
+
+Rozwiązanie:
+- **Kotlin:** `MainActivity.onApplyWindowInsets` woła `super`, a potem przekazuje wcięcia `systemBars() | displayCutout()` w pikselach przez `external fun nativeInsets(...)`.
+- **Rust:** cztery zmienne `AtomicU32` (zapis na wątku UI, odczyt na wątku gry). `Platform::insets` zwraca je co klatkę. Powierzchnia ma rozdzielczość okna, więc piksele okna to piksele powierzchni.
+
+Narzędzie testowe `scripts/import-image.sh [część nazwy] [timeout]`:
+- wybiera obraz płyty w systemowym pickerze (`uiautomator dump` i `input tap` w element z tekstem nazwy pliku),
+- czeka, aż powstanie `game.pack`.
+
+Razem ze `smoke-test.sh` daje pełny przebieg od czystej instalacji do menu, bez dotykania emulatora. Dwie pułapki napotkane przy pisaniu:
+- ikona podglądu pliku ma nazwę w `content-desc`, więc trzeba dopasować atrybut `text`,
+- `am start` aplikacji z `launchMode=singleTask` zamyka picker leżący nad nią.
+
+Wyniki na emulatorze (zrzuty ekranu):
+- **Pion:** przycisk wstecz i tytuł menu zaczynają się pod paskiem stanu (142 px). HUD etapu (SCORE, czas, BANANA) jest pod paskiem, a FLOOR nad paskiem gestów (63 px).
+- **Poziom** (obrót w trakcie etapu przez `settings put system user_rotation 1`): bez awarii, HUD odsunięty od wycięcia aparatu po lewej.
+- Smoke test (Vulkan) przechodzi, a `clippy` dla arm64 i x86_64 nie zgłasza ostrzeżeń.
+

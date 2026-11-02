@@ -325,3 +325,51 @@ Przy okazji widać było osobną rzecz. Instalacja nowej wersji przy otwartej ap
 potrafi odtworzyć starą aktywność w nowym procesie i zostawić czarny ekran. Dotyczy to tylko
 reinstalacji w trakcie pracy, nie zwykłego używania. Ponowne uruchomienie pomaga.
 
+## Krok 12: zawieszenie po wyjściu i ponownym otwarciu
+
+Objaw: po wyjściu z gry i ponownym otwarciu zostawał ekran powitalny z logo Androida.
+
+Diagnoza z logcat:
+- Po wyjściu przyciskiem wstecz z ekranu tytułowego aktywność dostaje `Destroy`, a wątek gry `APP_CMD_DESTROY`, ale gra działa dalej.
+- System zgłasza `Activity stop timeout` i `top resumed state loss timeout`: główny wątek aplikacji jest zablokowany.
+
+Przyczyna:
+- **winit 0.30** na Androidzie ignoruje `Destroy` (w jego kodzie: „TODO: forward onDestroy notification to application”).
+- **Sterownik silnika** sprawdza `Platform::wants_exit` tylko podczas rysowania klatki, a po `Destroy` okna już nie ma.
+- **Skutek:** `android_main` się nie kończy, a `GameActivity.onDestroy` czeka na wątek gry. Proces wisi, a następne otwarcie trafia do niego i nie może narysować aktywności.
+
+Poprawka (bez zmian w silniku): `MainActivity.onDestroy` kończy proces (`exitProcess(0)`), zanim
+GameActivity zacznie czekać.
+- To ta sama zasada, co dotąd: jedna gra na proces, która zapisuje postęp na bieżąco.
+- Następne otwarcie dostaje świeży proces.
+- Zmiany konfiguracji (obrót itd.) nie niszczą aktywności dzięki `configChanges` w manifeście.
+
+Sprawdzone ręcznie, trzy razy z rzędu: wstecz na ekranie tytułowym, proces kończy się od razu, ponowne
+otwarcie pokazuje menu. Testu automatycznego nie ma, bo zakończenie procesu aplikacji kończy też proces
+testu, który w nim działa. Istniejące 8 testów przechodzi.
+
+## Krok 13: ponowny pomiar wydajności przed pull requestem
+
+Gra na emulatorze wydawała się wolniejsza niż na początku. Ten sam pomiar co w kroku 10 (etap 1, Vulkan,
+linie `perf:` co 5 s):
+
+| Kiedy | FPS | Klatka p50 / p99 | Aktualizacja gry | Renderowanie |
+|---|---|---|---|---|
+| Krok 10 (commit `2622ef8`) | 60 | 16,7 / 19–28 ms | 0,25 ms | 16,4 ms |
+| Teraz, ten sam kod Rust | 24–25 | 35–43 / 72–74 ms | 8–10 ms | 31–33 ms |
+| Teraz, bez linii z podświetleniem fokusu (A/B) | 24–25 | 35–42 / 74 ms | 8,7–9,7 ms | 31–32 ms |
+| Po restarcie systemu emulatora (pierwsze minuty) | 16–19 | 48–57 / 109–160 ms | 9–25 ms | 37–45 ms |
+| 2 minuty po restarcie | 26–27 | 36–43 / 62–80 ms | 8,6–10 ms | 27–29 ms |
+
+Co wiadomo:
+- **Kod gry się nie zmienił:** od commita `2622ef8` (pomiar z 60 FPS) zmienił się tylko `MainActivity.kt` (16 linii). `native/` jest bez zmian.
+- **Podświetlenie fokusu nie jest przyczyną:** pomiar A/B z tą linią i bez niej daje to samo.
+- **Wyświetlacz emulatora** cały czas ma 60 Hz.
+- **Pętla w powłoce emulatora** (300 000 iteracji, niezależna od gry) trwała 414 ms przed restartem, 973 ms tuż po restarcie i 429 ms dwie minuty później. Szybkość emulatora mocno się waha, a wraz z nią czas aktualizacji gry.
+- **Komputer** był obciążony w około 20%.
+
+Wniosek: spadek z 60 do około 25 FPS wynika ze stanu emulatora, a nie z portu. Najbardziej prawdopodobna
+przyczyna to wyświetlanie emulatora w panelu Running Devices Android Studio. Android Studio pobiera wtedy
+każdą klatkę z GPU emulatora, co obciąża GPU i procesor emulatora. Wiarygodne liczby da dopiero telefon
+(etap 4).
+

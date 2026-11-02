@@ -10,6 +10,7 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.google.androidgamesdk.GameActivity
+import kotlin.system.exitProcess
 
 /**
  * The game's activity. GameActivity loads libmonkeyball.so (the manifest's `android.app.lib_name`) and runs
@@ -54,6 +55,17 @@ class MainActivity : GameActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+
+    /**
+     * The activity is going away for good ("back" at the title, swiped away, closed by the system). winit
+     * 0.30 does not pass this on to the game, so the game's thread would keep running, and GameActivity's
+     * onDestroy waits for that thread: the app would hang, and the next start would stay on the splash
+     * screen. The game runs once per process and saves as it goes, so end the process here; the next start
+     * gets a fresh one. (The manifest's configChanges keep rotation and the like from destroying it.)
+     */
+    override fun onDestroy() {
+        exitProcess(0)
     }
 
     /**

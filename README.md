@@ -28,14 +28,6 @@ Opcjonalne:
 |---|---|
 | 2026-10-07 | Rozpoczęcie prac nad silnikiem gry `monkey-ball-rs` |
 | 2026-10-26 | Uzupełnienie README |
-| 2026-11-02 | Utworzenie projektu w Android Studio i dołączenie silnika gry jako submodułu |
-| 2026-11-02 | Budowanie silnika z poziomu Gradle i pierwsze APK z aktywnością `GameActivity` |
-| 2026-11-02 | Pierwsze uruchomienie na emulatorze; poprawka wyboru API graficznego (Vulkan, a w razie problemów OpenGL ES) |
-| 2026-11-02 | Wczytanie danych gry z obrazu płyty i pierwsza rozgrywka na emulatorze |
-| 2026-11-02 | Dopasowanie interfejsu gry do pasków systemowych i wycięcia ekranu |
-| 2026-11-02 | Testy automatyczne uruchamiane z Android Studio; systemowy przycisk wstecz, tryb pełnoekranowy, kopia zapasowa |
-| 2026-11-02 | Testy powrotu z tła i wyboru złego pliku; sprawdzenie usuwania danych gry |
-| 2026-11-02 | Pełna głośność dźwięku na telefonie; pomiar wydajności na emulatorze (60 FPS przez Vulkan) |
-| 2026-11-02 | Naprawa „bladego” obrazu po powrocie do gry (podświetlenie fokusu Androida) |
-| 2026-11-02 | Naprawa zawieszenia aplikacji po wyjściu i ponownym otwarciu |
-| 2026-11-02 | Krótkie wyjaśnienie przed wyborem pliku z grą i powód odrzucenia złego pliku |
+| 2026-11-02 | Projekt w Android Studio z silnikiem gry jako submodułem, budowanym z poziomu Gradle; aplikacja z aktywnością `GameActivity` |
+| 2026-11-02 | Pierwsze uruchomienie na emulatorze: grafika przez Vulkan (OpenGL ES w razie problemów), wczytanie danych gry z obrazu płyty, sterowanie dotykiem, dźwięk |
+| 2026-11-02 | Testy automatyczne uruchamiane z Android Studio; poprawki działania na Androidzie (paski systemowe, przycisk wstecz, powrót z tła, ponowne otwarcie) i pomiar wydajności |

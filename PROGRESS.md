@@ -377,3 +377,22 @@ z aktualizacją gry 0,16 ms. W panelu Running Devices Android Studio pobiera ka�
 Do pomiarów i do grania na emulatorze lepiej używać osobnego okna emulatora (w Device Manager: „Launch in a
 tool window” wyłączone albo uruchomienie z linii poleceń). Wiarygodne liczby da dopiero telefon (etap 4).
 
+## Krok 14: wyjaśnienie przed wyborem pliku
+
+Przy pierwszym starcie od razu otwierał się systemowy wybór pliku, bez słowa, czego gra potrzebuje. Gra nie
+może tego napisać sama, bo czcionki ma dopiero z obrazu płyty.
+
+Teraz `MainActivity.pickImage` pokazuje najpierw krótki dialog (`AlertDialog` z AppCompat, bez nowych
+bibliotek):
+- „Choose the game file”: obraz płyty Super Monkey Ball, np. `Super Monkey Ball (USA).rvz`, czyli kopia płyty GameCube (RVZ, ISO albo GCM).
+- „Choose file” otwiera picker. „Cancel” zamyka grę, jak wcześniej anulowanie pickera.
+- Gdy wybrany plik nie jest grą, ten sam dialog ma tytuł „This file cannot be used”, a jako treść powód podany przez silnik (np. „This file is not a GameCube disc image. Supported: …”). Wcześniej był to toast, który ucinał tekst do dwóch linii.
+- Toast został tylko dla błędów krytycznych (`onGameError`).
+
+Testy przechodzą przez dialog (przycisk „Choose file”). Test złego pliku sprawdza dialog z powodem.
+Po otwarciu pickera testy czekają 1,5 s, bo stuknięcia w trakcie animacji otwierania przepadają. 8 z 8
+testów przechodzi.
+
+Banany przy napisie MONKEY BALL: silnik rysuje je tylko wtedy, gdy obok napisu jest miejsce. W pionie napis
+zajmuje prawie całą szerokość, więc ich nie ma. W poziomie są, jak na desktopie (sprawdzone zrzutem).
+To zachowanie silnika, nie błąd portu. Decyzja: gra zostaje w obu orientacjach, bez blokady w manifeście.

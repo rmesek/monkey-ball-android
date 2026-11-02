@@ -62,6 +62,10 @@ class GameTest {
         assertTrue("game.pack is ${pack.length()} bytes", pack.length() > 100L shl 20)
         assertEquals(listOf("import", "menu"), GameEvents.states.toList())
         assertNoErrors()
+        // The first save, written before the game starts: full volume on a phone (native/src/lib.rs).
+        val saves = pack.parentFile!!.listFiles { f -> f.name.startsWith("profile") }.orEmpty()
+        val save = saves.joinToString("\n") { it.readText() }
+        assertTrue("first save: $save", "setting music_volume 100" in save && "setting sfx_volume 100" in save)
     }
 
     @Test

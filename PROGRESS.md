@@ -1,6 +1,6 @@
 # Dziennik postępu
 
-Ten plik zbiera to, co zostało zrobione, jak i dlaczego, wraz z napotkanymi problemami i wynikami pomiarów.
+Ten plik zbiera, krok po kroku, to, co zostało zrobione, jak i dlaczego, wraz z napotkanymi problemami i wynikami pomiarów.
 Posłuży jako materiał do sprawozdania. Plan dalszych prac jest w [TODO.md](TODO.md).
 
 ## Wybrane podejście
@@ -34,14 +34,14 @@ Założenia:
 | cargo-ndk | 4.1.2 |
 | monkey-ball-rs | v1.0.0 (`802f518`) |
 
-## 2026-11-02: projekt Android Studio (etap 0)
+## Krok 1: projekt Android Studio (etap 0)
 
 - Gałąź `dev`. Submoduł `monkey-ball-rs` dodany przez `git submodule add` i ustawiony na `v1.0.0`.
 - Projekt utworzony szablonem „No Activity” (Kotlin, Kotlin DSL), pakiet `io.github.rmesek.monkeyball`.
 - NDK zainstalowane przez SDK Manager. Wersja ustawiona w `app/build.gradle.kts` (`ndkVersion`), żeby build nie zależał od tego, co akurat jest zainstalowane.
 - Pusty projekt buduje się poleceniem `./gradlew assembleDebug`.
 
-## 2026-11-02: silnik w APK (etap 1)
+## Krok 2: silnik w APK (etap 1)
 
 Co powstało:
 - **`app/build.gradle.kts`:**
@@ -87,9 +87,9 @@ Wyniki:
   Biblioteka eksportuje `android_main` i `Java_..._nativeImagePicked`. Segmenty są wyrównane do 16 KB (wymóg Androida 15+ dla nowych aplikacji). Zależy tylko od bibliotek systemowych: `liblog`, `libandroid`, `libaaudio`, `libdl`, `libm`, `libc`.
 - APK debug ma 19,3 MB.
 
-Jeszcze nie sprawdzone w tym wpisie: uruchomienie (patrz następny wpis).
+Jeszcze nie sprawdzone w tym wpisie: uruchomienie (patrz następny krok).
 
-## 2026-11-02: pierwsze uruchomienie, wybór backendu i smoke test
+## Krok 3: pierwsze uruchomienie na emulatorze, wybór backendu i smoke test
 
 Pierwsze uruchomienie na emulatorze (Pixel 9, Android 17, API 37) kończyło się zamknięciem aplikacji. Z logcat:
 
@@ -123,9 +123,9 @@ Wyniki na emulatorze (Pixel 9, API 37, host z NVIDIA GeForce RTX 4080):
 | auto, wybrał Vulkan | Goldfish GFXStream (NVIDIA GeForce RTX 4080), Vulkan, VirtualGpu | działa, otwiera się wybór pliku |
 | wymuszony GL | Android Emulator OpenGL ES Translator, GL | działa |
 
-Jeszcze nie sprawdzone w tym wpisie: telefon, dotyk, dźwięk, import obrazu płyty (patrz następny wpis).
+Jeszcze nie sprawdzone w tym wpisie: telefon, dotyk, dźwięk, import obrazu płyty (patrz następny krok).
 
-## 2026-11-02: import obrazu płyty i pierwsza rozgrywka na emulatorze
+## Krok 4: import obrazu płyty i pierwsza rozgrywka na emulatorze
 
 Obraz `Super Monkey Ball (USA).rvz` (475 MB) wgrany do `Download` na emulatorze. Systemowy wybór pliku
 obsłużony z komputera: `uiautomator dump` podaje położenie pliku, a `adb shell input tap` w niego stuka.
@@ -151,7 +151,7 @@ Znalezione problemy:
 Jeszcze nie sprawdzone: telefon, dźwięk (emulator otwiera strumień AAudio, ale odsłuchu nie było),
 sterowanie kulką, gest wstecz, wyjście do tła i powrót, obrót ekranu.
 
-## 2026-11-02: wcięcia ekranu (paski systemowe, wycięcie aparatu)
+## Krok 5: wcięcia ekranu (paski systemowe, wycięcie aparatu)
 
 Problem: przy `targetSdk` 35+ okno zajmuje cały ekran, od krawędzi do krawędzi, pod paskiem stanu i paskiem nawigacji. Gra rysowała przycisk wstecz i wynik w HUD pod paskiem stanu.
 
@@ -177,7 +177,7 @@ Wyniki na emulatorze (zrzuty ekranu):
 - **Poziom** (obrót w trakcie etapu przez `settings put system user_rotation 1`): bez awarii, HUD odsunięty od wycięcia aparatu po lewej.
 - Smoke test (Vulkan) przechodzi, a `clippy` dla arm64 i x86_64 nie zgłasza ostrzeżeń.
 
-## 2026-11-02: testy instrumentacyjne, przycisk wstecz, tryb immersive, kopia zapasowa
+## Krok 6: testy instrumentacyjne, przycisk wstecz, tryb immersive, kopia zapasowa
 
 ### Testy uruchamiane z Android Studio
 
@@ -225,5 +225,33 @@ Niedokończony import (`game.pack.tmp`) jest pomijany wszędzie.
 
 ### Komunikat przy złym pliku
 
-Ekran importu nie ma czcionek, dopóki nie dostanie obrazu, więc o złym pliku mówi aktywność: toast (`showMessage`), a potem ponowny wybór. Na złym pliku jeszcze nie sprawdzone.
+Ekran importu nie ma czcionek, dopóki nie dostanie obrazu, więc o złym pliku mówi aktywność: toast (`showMessage`), a potem ponowny wybór. Sprawdzone w kroku 7.
+
+## Krok 7: domknięcie etapu 2 (tło, zły plik, usuwanie danych gry)
+
+Nowe testy instrumentacyjne:
+
+| Test | Co sprawdza | Czas (emulator) |
+|---|---|---|
+| `aFileThatIsNotTheGameIsRefused` | w `Download` powstaje 2 MB losowych danych jako `.iso`; po wybraniu go: komunikat dla gracza, picker otwiera się ponownie, stan zostaje `import`, `game.pack` nie powstaje | 5,0 s |
+| `playSurvivesGoingToTheBackground` | etap 1 uruchomiony klawiszem Enter; aktywność zatrzymana i wznowiona (`ActivityScenario.moveToState`); po powrocie stan `play`, bez błędów, a zrzut ekranu (`UiAutomation.takeScreenshot`) pokazuje obraz, a nie jednolity kolor | 12,6 s |
+
+Wynik: 8 z 8 testów przechodzi, cały przebieg trwa około minuty razem z buildem.
+
+Wyjście do tła i powrót to pierwsza sytuacja, w której silnik traci powierzchnię: wcześniej żadna platforma mu jej nie odbierała. Logcat z testu to potwierdza: `NativeWindowDestroyed`, potem `NativeWindowCreated` z innym adresem okna. Sterownik tworzy nową powierzchnię wgpu przy `resumed`, zachowuje urządzenie, renderer i stan gry, a etap rysuje się dalej.
+
+Pułapki przy pisaniu testów:
+- **Bez powłoki.** `UiAutomation.executeShellCommand` nie uruchamia powłoki: komenda jest dzielona po spacjach, nie ma przekierowania `>` ani cudzysłowów. Plik testowy tworzy więc `dd if=/dev/urandom of=...`, a nie `head > plik`.
+- **Indeksowanie pliku.** Plik utworzony z powłoki trzeba zgłosić do indeksu mediów (`content call --uri content://media/external/file --method scan_file`), inaczej picker go nie pokaże.
+- **Czekanie na komendę.** Wynik `executeShellCommand` trzeba przeczytać do końca, żeby poczekać na zakończenie komendy.
+- **Kolejność testów.** Test złego pliku usuwa `game.pack`, więc musi się wykonać przed importem. Kolejność jest alfabetyczna (`@FixMethodOrder`), stąd nazwa zaczynająca się od `a`.
+
+Usuwanie danych gry sprawdzone ręcznie na emulatorze. Nie ma na to testu automatycznego, bo gra kończy wtedy proces, a razem z nim proces testu.
+1. Options → REMOVE GAME DATA → „TAP AGAIN TO CONFIRM” → ponowne stuknięcie.
+2. Gra się zamyka (tak jak na desktopie), w logu jest `game data removed`, a w `files/` nie ma już `game.pack`.
+3. Następny start pokazuje ekran importu i otwiera picker.
+
+Ekran opcji pokazuje „GAME DATA: 137 MB” (144 099 740 B) i „KEPT WITH THE SAVES IN THE APP'S STORAGE”.
+
+Rust loguje też każdą zmianę stanu gry (`state: import`, `state: menu`, `state: play`), co ułatwia czytanie logcat.
 

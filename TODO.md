@@ -48,24 +48,24 @@ monkey-ball-android/
 - [x] Start jak `start()` w `mb-desktop/src/lib.rs`:
   - gotowy `game.pack` uruchamia menu,
   - w przeciwnym razie `LatePack` i `ImportScreen`.
-- [x] Wybór obrazu płyty (toast przy złym pliku zrobiony, nie sprawdzony na złym pliku):
+- [x] Wybór obrazu płyty (z komunikatem przy złym pliku):
   1. `Command::PickImage` w Ruście wywołuje przez JNI metodę `pickImage()` z Kotlina.
   2. `OpenDocument("*/*")` zwraca deskryptor, `detachFd()` przekazuje go do `external fun nativeImagePicked(fd)`.
   3. Przy następnym `poll_input` deskryptor trafia do `Importer::open` i do `ImageSlot`.
   4. Błąd: toast i ponowny wybór.
-- [ ] `Command::RemoveGameData`: zakończ grę i usuń `game.pack` (zrobione, nie sprawdzone).
+- [x] `Command::RemoveGameData`: zakończ grę i usuń `game.pack` (sprawdzone ręcznie na emulatorze).
 - [ ] Dźwięk: `audio_cpal` (AAudio), zawieszany w `on_visible(false)`.
 - [ ] Dotyk i przycisk wstecz. Dotyk w menu działa na emulatorze; systemowy wstecz cofa w grze (`nav_depth`), test `menuSystemBackStepsOutOfSubMenus`. Sprawdzić sterowanie kulką na telefonie.
 - [x] Ekran zawsze włączony (`FLAG_KEEP_SCREEN_ON`) i tryb immersive.
 - [x] Wycięcia ekranu (`Platform::insets`): z Kotlina (`onApplyWindowInsets`), paski systemowe i wycięcie aparatu.
 - [x] `dataExtractionRules` i `backup_rules`: `game.pack` przenoszony na nowy telefon, ale poza kopią w chmurze (limit 25 MB); zapisy wszędzie.
-- [ ] Sprawdzić odtwarzanie powierzchni po wyjściu z aplikacji i powrocie (obrót w trakcie etapu działa na emulatorze).
+- [x] Odtwarzanie powierzchni po wyjściu z aplikacji i powrocie (test `playSurvivesGoingToTheBackground`) i po obrocie.
 - [x] Fallback na GLES, gdy Vulkan nie działa (`Platform::backends`): Vulkan, gdy jest adapter, inaczej GLES; wymuszenie przez `debug.monkeyball.backend`.
 
 ## Testy
 
 - [x] Testy instrumentacyjne `app/src/androidTest/.../GameTest.kt`, uruchamiane z Android Studio albo `./gradlew connectedDebugAndroidTest` (orchestrator: każdy test w osobnym procesie).
-- [ ] Test złego pliku (toast) i usunięcia danych gry.
+- [x] Test złego pliku (`aFileThatIsNotTheGameIsRefused`); usuwanie danych gry sprawdzone ręcznie (kończy proces, więc i test).
 
 ## Etap 3: żyroskop (opcjonalne)
 

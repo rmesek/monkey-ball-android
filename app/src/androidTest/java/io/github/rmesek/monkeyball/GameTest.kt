@@ -1,6 +1,7 @@
 package io.github.rmesek.monkeyball
 
 import android.graphics.Rect
+import android.os.ParcelFileDescriptor
 import android.view.accessibility.AccessibilityNodeInfo
 import androidx.lifecycle.Lifecycle
 import androidx.test.core.app.ActivityScenario
@@ -89,13 +90,84 @@ class GameTest {
         // At the title "back" leaves the app, which ends this process: not done here.
     }
 
+    @Test
+    fun playSurvivesGoingToTheBackground() {
+        assumeTrue("no game data: run importsTheDiscImageAndShowsTheMenu first", pack.exists())
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        waitFor("the title menu", 30) { GameEvents.state == "menu" }
+        // Course play -> Beginner -> start: Enter until a stage runs.
+        for (i in 0 until 8) {
+            if (GameEvents.state == "play") break
+            shell("input keyevent KEYCODE_ENTER")
+            Thread.sleep(1500)
+        }
+        waitFor("a stage", 20) { GameEvents.state == "play" }
+        Thread.sleep(2000)
+        assertTrue("a stage is on screen", screenHasPicture())
+
+        // Away (onStop: the window and its surface go) and back (a new surface).
+        scenario.moveToState(Lifecycle.State.CREATED)
+        Thread.sleep(2000)
+        scenario.moveToState(Lifecycle.State.RESUMED)
+        Thread.sleep(3000)
+
+        assertNoErrors()
+        assertEquals("still in the stage", "play", GameEvents.state)
+        assertTrue("the stage is drawn again", screenHasPicture())
+    }
+
+    @Test
+    fun aFileThatIsNotTheGameIsRefused() {
+        pack.delete()
+        val bad = "/sdcard/Download/not-a-disc-image.iso"
+        // executeShellCommand runs no shell (no redirection): dd writes the file itself. 2 MB of noise.
+        shell("dd if=/dev/urandom of=$bad bs=65536 count=32")
+        // Make it visible to the picker (the media store indexes Download).
+        shell("content call --uri content://media/external/file --method scan_file --arg $bad")
+        try {
+            ActivityScenario.launch(MainActivity::class.java)
+            waitFor("the document picker", 30) { pickerShown() }
+            val file = waitForNode(10) { find { it.text?.toString() == "not-a-disc-image.iso" } }
+            assumeTrue("the test file is not shown in the picker", file != null)
+            click(file!!)
+            waitFor("a message to the player", 20) { GameEvents.messages.isNotEmpty() }
+            waitFor("the document picker again", 10) { pickerShown() }
+            assertEquals("still importing", "import", GameEvents.state)
+            assertTrue("no game data", !pack.exists())
+            assertNoErrors()
+        } finally {
+            shell("rm -f $bad")
+            shell("content call --uri content://media/external/file --method scan_file --arg $bad")
+        }
+    }
+
     // ---- helpers -------------------------------------------------------------------------------------
 
-    private fun shell(command: String) = instrumentation.uiAutomation.executeShellCommand(command).close()
+    /**
+     * Whether the screen shows a picture rather than one flat colour (black, a frozen clear colour): many
+     * different colours in a coarse sample of it.
+     */
+    private fun screenHasPicture(): Boolean {
+        val shot = instrumentation.uiAutomation.takeScreenshot() ?: return false
+        val colors = HashSet<Int>()
+        for (y in 0 until shot.height step shot.height / 40) {
+            for (x in 0 until shot.width step shot.width / 20) colors.add(shot.getPixel(x, y))
+        }
+        shot.recycle()
+        return colors.size > 50
+    }
+
+    /**
+     * Run a command as the shell user and wait for it to finish. No shell is involved: the command is split
+     * at spaces, so no quotes, pipes or redirection.
+     */
+    private fun shell(command: String) =
+        ParcelFileDescriptor.AutoCloseInputStream(instrumentation.uiAutomation.executeShellCommand(command))
+            .use { it.readBytes() }
 
     /** Force a graphics backend (`debug.monkeyball.backend`, read by the Rust side at start), or none. */
     private fun setBackend(backend: String?) {
-        shell("setprop debug.monkeyball.backend ${backend ?: "''"}")
+        shell("setprop debug.monkeyball.backend ${backend ?: "auto"}")
     }
 
     private fun startsOn(backend: String, expected: String) {

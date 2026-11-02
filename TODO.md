@@ -81,7 +81,11 @@ monkey-ball-android/
   - pamięć (Android Studio Profiler, `dumpsys meminfo`),
   - czas startu,
   - CPU i zużycie baterii.
-- [ ] Zawsze te same etapy i ten sam telefon.
+- [ ] Zawsze te same etapy i ten sam telefon. (Logcat `perf:` co 5 s gry jest gotowy; pomiar na emulatorze w PROGRESS.md, krok 10.)
+
+## Na później
+
+- [ ] Czasami „blady” obraz po otwarciu aplikacji (kolory mniej nasycone). Nie udało się odtworzyć na emulatorze; wrócić, gdy będzie wiadomo kiedy występuje.
 
 ## Etap 5: osobna aplikacja WebView (na koniec)
 

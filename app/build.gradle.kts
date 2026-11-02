@@ -34,10 +34,26 @@ android {
     }
 }
 
+// The game itself: native/ (Rust) built into src/main/jniLibs/<abi>/libmonkeyball.so before every build.
+// arm64-v8a for phones, x86_64 for the emulator. Cargo decides what needs rebuilding. API level 26 = minSdk.
+val ndkDir = androidComponents.sdkComponents.ndkDirectory
+val cargoNdk = tasks.register<Exec>("cargoNdk") {
+    workingDir = rootProject.file("native")
+    commandLine(
+        "cargo", "ndk", "--platform", "26", "-t", "arm64-v8a", "-t", "x86_64",
+        "-o", file("src/main/jniLibs").absolutePath, "build", "--release",
+    )
+    // The NDK of ndkVersion above, so cargo-ndk needs no environment of its own. Read when the task is
+    // configured (after the android block), as a plain string the configuration cache can keep.
+    environment("ANDROID_NDK_HOME", ndkDir.get().asFile.absolutePath)
+}
+tasks.named("preBuild") { dependsOn(cargoNdk) }
+
 dependencies {
+    // GameActivity: the activity the Rust side (winit's android-game-activity backend) runs in.
+    implementation(libs.games.activity)
+    // Its base class and the Theme.AppCompat the activity uses; games-activity brings it anyway.
     implementation(libs.androidx.appcompat)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.material)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)

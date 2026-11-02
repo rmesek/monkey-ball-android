@@ -329,6 +329,7 @@ Please pick another disc image."
     fn after_update(&mut self, _window: &Window, top: &dyn Game) {
         if top.name() != self.top {
             self.top = top.name();
+            log(LOG_INFO, &format!("state: {}", self.top));
             notify(&self.app, "onGameState", self.top);
         }
         if top.nav_depth() != self.nav_depth {

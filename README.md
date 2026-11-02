@@ -28,3 +28,10 @@ Opcjonalne:
 |---|---|
 | 2026-10-07 | Rozpoczęcie prac nad silnikiem gry `monkey-ball-rs` |
 | 2026-10-26 | Uzupełnienie README |
+| 2026-11-02 | Utworzenie projektu w Android Studio i dołączenie silnika gry jako submodułu |
+| 2026-11-02 | Budowanie silnika z poziomu Gradle i pierwsze APK z aktywnością `GameActivity` |
+| 2026-11-02 | Pierwsze uruchomienie na emulatorze; poprawka wyboru API graficznego (Vulkan, a w razie problemów OpenGL ES) |
+| 2026-11-02 | Wczytanie danych gry z obrazu płyty i pierwsza rozgrywka na emulatorze |
+| 2026-11-02 | Dopasowanie interfejsu gry do pasków systemowych i wycięcia ekranu |
+| 2026-11-02 | Testy automatyczne uruchamiane z Android Studio; systemowy przycisk wstecz, tryb pełnoekranowy, kopia zapasowa |
+| 2026-11-02 | Testy powrotu z tła i wyboru złego pliku; sprawdzenie usuwania danych gry |

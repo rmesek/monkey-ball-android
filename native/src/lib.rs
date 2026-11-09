@@ -558,6 +558,14 @@ fn android_main(app: AndroidApp) {
     }
     // One game per process: winit refuses a second event loop, and the engine installs its trig tables
     // once. Android keeps a process after its activity is gone, so end it here and let the next start be
-    // a fresh one.
-    std::process::exit(0);
+    // a fresh one. `_exit`, not `std::process::exit`: the latter runs the libraries' static destructors on
+    // this thread, and one of them frees a JNI reference with the main thread's JNIEnv, which aborts the
+    // process (a native crash report instead of a quiet exit). Everything worth keeping is written by now.
+    // SAFETY: ends the process at once; nothing runs after it.
+    unsafe { _exit(0) }
+}
+
+unsafe extern "C" {
+    /// Bionic's `_exit`: end the process without running exit handlers or static destructors.
+    fn _exit(status: c_int) -> !;
 }

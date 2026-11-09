@@ -454,3 +454,17 @@ Sprawdzone ręcznie na emulatorze (czujniki ustawiane z komputera: `adb emu sens
 Jeszcze nie sprawdzone: telefon, a w szczególności kierunki sterowania w poziomie. Na emulatorze sprawdzony był tylko pion.
 
 Przy okazji: Android Studio podniósł AGP do 9.5.1 i Gradle do 9.8.2. Lint zgłasza tylko nowsze wersje (Gradle 9.9.0, games-activity 4.4.2); ostrzeżeń w kodzie nie ma. Ostrzeżenie Gradle o przestarzałym `Configuration.setVisible` pochodzi z AGP, nie z naszego skryptu.
+
+## Krok 18: obrót ekranu w menu przy sterowaniu przechyleniem
+
+Na telefonie sterowanie przechyleniem działa w pionie i w poziomie. Brakowało jednak sposobu na zmianę orientacji: obrót był zablokowany od chwili wybrania „Controls: tilt”, także w menu.
+
+Teraz blokada obowiązuje tylko w etapie:
+- Rust (`after_update` w `native/src/lib.rs`) woła `setTilt(true)`, gdy przechylenie jest wybrane i na wierzchu jest stan `play`, a `setTilt(false)` po wyjściu z etapu.
+- W menu czujnik jest wyłączony, a ekran obraca się jak zwykle. Gracz ustawia telefon tak, jak chce grać, i dopiero wtedy wchodzi do etapu.
+- Pauza należy do etapu, więc w pauzie obrót dalej jest zablokowany. Gra pauzuje się sama, gdy przechodzi w tło, więc po powrocie obrót jest dalej zablokowany, a gracz wraca do menu pauzy.
+- Kalibracja na starcie etapu i na „GO” zostaje bez zmian, więc pierwsze odczyty po włączeniu czujnika ustawiają poziom.
+
+| Test | Co sprawdza |
+|---|---|
+| `tiltSteeringListensToTheSensorAndKeepsTheRotationInAStage` | przechylenie wybrane w menu: obrót wolny i brak odczytów; w etapie: obrót zablokowany i odczyty z czujnika, w tle brak odczytów, po powrocie znowu są (gra w pauzie); po wyjściu z etapu przez pauzę: obrót wolny i brak odczytów; po powrocie do gałki etap bez blokady |

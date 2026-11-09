@@ -56,7 +56,7 @@ class MainActivity : GameActivity() {
             ?: sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
     }
 
-    /** The game steers by tilt (the player chose it in the options); set from Rust through setTilt. */
+    /** The game steers by tilt (the player chose it, and a stage runs); set from Rust through setTilt. */
     private var tilt = false
 
     private val tiltListener = object : SensorEventListener {
@@ -146,8 +146,10 @@ class MainActivity : GameActivity() {
     fun hasTiltSensor() = orientationSensor != null
 
     /**
-     * Called from Rust (game thread) when the game starts or stops steering by tilt. While it does, the screen
-     * keeps the rotation it has: turning the phone to steer must not turn the picture as well.
+     * Called from Rust (game thread) when the game starts or stops steering by tilt: a stage starts or ends
+     * with tilt chosen in the options. While it steers, the screen keeps the rotation it has: turning the
+     * phone to steer must not turn the picture as well. In the menus it rotates as usual, so the player can
+     * pick the orientation to play in.
      */
     @Suppress("unused")
     fun setTilt(on: Boolean) = runOnUiThread {

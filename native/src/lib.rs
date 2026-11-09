@@ -316,6 +316,9 @@ struct Android {
     /// Steering by device tilt: on while the player chose it in the options, fed by the activity's
     /// orientation sensor (`nativeTilt`).
     tilt: TiltSteering,
+    /// Tilt steers now: chosen, and a stage runs. The activity listens to the sensor and keeps the
+    /// rotation exactly while this is on (`MainActivity.setTilt`).
+    tilt_steering: bool,
     /// Frame timings of play, summed up in logcat every `PERF_PERIOD` (`perf:` lines).
     perf: PerfStats,
     perf_since: Option<Instant>,
@@ -375,10 +378,10 @@ impl Platform for Android {
                         .insert(0, format!("Game data: {} MB", bytes >> 20));
                 }
                 // The menu says how the player steers at its start and whenever the option changes.
+                // The sensor and the rotation lock follow in `after_update`, once a stage runs.
                 Command::Tilt { enabled, range_deg } => {
                     if enabled != self.tilt.enabled() {
-                        log(LOG_INFO, &format!("tilt steering: {enabled}"));
-                        set_tilt(&self.app, enabled);
+                        log(LOG_INFO, &format!("tilt steering chosen: {enabled}"));
                     }
                     self.tilt.set_enabled(enabled, range_deg);
                 }
@@ -417,6 +420,14 @@ impl Platform for Android {
         if top.nav_depth() != self.nav_depth {
             self.nav_depth = top.nav_depth();
             report_nav_depth(&self.app, self.nav_depth);
+        }
+        // Tilt steers only in a stage. The menus leave the sensor off and the screen free to rotate, so the
+        // player can turn the phone to the orientation they want to play in before a stage starts.
+        let steering = self.tilt.enabled() && self.top == "play";
+        if steering != self.tilt_steering {
+            self.tilt_steering = steering;
+            log(LOG_INFO, &format!("tilt steering: {steering}"));
+            set_tilt(&self.app, steering);
         }
     }
 
@@ -519,6 +530,7 @@ fn run(app: AndroidApp) -> Result<(), String> {
         nav_depth: 0,
         back_down: false,
         tilt: TiltSteering::default(),
+        tilt_steering: false,
         perf: PerfStats::new(),
         perf_since: None,
     };

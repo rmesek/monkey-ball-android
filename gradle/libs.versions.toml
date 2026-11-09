@@ -1,5 +1,5 @@
 [versions]
-agp = "9.5.0"
+agp = "9.5.1"
 # The version the Rust side's android-activity 0.6 is written against (its README); upgrade them together.
 gamesActivity = "4.4.0"
 appcompat = "1.8.0"

@@ -1,6 +1,7 @@
 package io.github.rmesek.monkeyball
 
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * What the game (Rust) has reported in this process: the GPU it runs on, the game states it went through and
@@ -18,6 +19,13 @@ object GameEvents {
     /** "Back" steps to the title screen in the state on top (`Game::nav_depth`); 0 at the title. */
     @Volatile
     var navDepth: Int = 0
+
+    /** The game steers by device tilt: the activity listens to the orientation sensor and keeps the rotation. */
+    @Volatile
+    var tilt = false
+
+    /** Orientation samples sent to the game. */
+    val tiltSamples = AtomicInteger()
 
     /** Fatal errors the game showed; the run ends after one. */
     val errors = CopyOnWriteArrayList<String>()

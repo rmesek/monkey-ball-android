@@ -1,5 +1,6 @@
 package io.github.rmesek.monkeyball
 
+import android.content.pm.ActivityInfo
 import android.graphics.Rect
 import android.os.ParcelFileDescriptor
 import android.view.accessibility.AccessibilityNodeInfo
@@ -120,6 +121,50 @@ class GameTest {
         assertTrue("the stage is drawn again", screenHasPicture())
     }
 
+    /**
+     * Options -> Controls: tilt, and back to the stick. While tilt steers, the orientation sensor feeds the
+     * game (only while the game is in front) and the screen keeps its rotation. The test ends with the stick
+     * again, as the other tests expect.
+     */
+    @Test
+    fun tiltSteeringListensToTheSensorAndKeepsTheRotation() {
+        assumeTrue("no game data: run importsTheDiscImageAndShowsTheMenu first", pack.exists())
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
+        waitFor("the title menu", 30) { GameEvents.state == "menu" }
+        assertTrue("the device has no orientation sensor", hasTiltSensor(scenario))
+        assertTrue("steering by the stick at first", !GameEvents.tilt)
+        assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, requestedOrientation(scenario))
+
+        // The title's third entry, then the options' fifth row (unlock all, stick curve, music, sound, controls).
+        repeat(2) { shell("input keyevent KEYCODE_DPAD_DOWN") }
+        shell("input keyevent KEYCODE_ENTER")
+        waitFor("the options", 10) { GameEvents.navDepth > 0 }
+        repeat(4) { shell("input keyevent KEYCODE_DPAD_DOWN") }
+        shell("input keyevent KEYCODE_ENTER")
+        waitFor("tilt steering", 10) { GameEvents.tilt }
+        assertEquals("the rotation is kept", ActivityInfo.SCREEN_ORIENTATION_LOCKED, requestedOrientation(scenario))
+        waitFor("orientation samples", 10) { GameEvents.tiltSamples.get() > 10 }
+
+        // In the background: no samples. Back in front: samples again.
+        scenario.moveToState(Lifecycle.State.CREATED)
+        Thread.sleep(500)
+        val away = GameEvents.tiltSamples.get()
+        Thread.sleep(1000)
+        assertEquals("samples in the background", away, GameEvents.tiltSamples.get())
+        scenario.moveToState(Lifecycle.State.RESUMED)
+        waitFor("samples after coming back", 10) { GameEvents.tiltSamples.get() > away + 10 }
+
+        // The same row again: the stick.
+        shell("input keyevent KEYCODE_ENTER")
+        waitFor("stick steering again", 10) { !GameEvents.tilt }
+        assertEquals("rotation free again", ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, requestedOrientation(scenario))
+        Thread.sleep(500)
+        val off = GameEvents.tiltSamples.get()
+        Thread.sleep(1000)
+        assertEquals("samples after switching tilt off", off, GameEvents.tiltSamples.get())
+        assertNoErrors()
+    }
+
     @Test
     fun aFileThatIsNotTheGameIsRefused() {
         pack.delete()
@@ -148,6 +193,18 @@ class GameTest {
     }
 
     // ---- helpers -------------------------------------------------------------------------------------
+
+    private fun requestedOrientation(scenario: ActivityScenario<MainActivity>): Int {
+        var orientation = 0
+        scenario.onActivity { orientation = it.requestedOrientation }
+        return orientation
+    }
+
+    private fun hasTiltSensor(scenario: ActivityScenario<MainActivity>): Boolean {
+        var has = false
+        scenario.onActivity { has = it.hasTiltSensor() }
+        return has
+    }
 
     /**
      * Whether the screen shows a picture rather than one flat colour (black, a frozen clear colour): many

@@ -1,7 +1,8 @@
 //! The game on Android: `android_main`, which GameActivity runs on a thread of its own once it has loaded
 //! this library, and the Android `Platform` of the engine's driver (`mb-driver`). The event loop, the
 //! surface, touch and the frame are the driver's; this crate adds where the data lives, the document picker
-//! (in Kotlin, `MainActivity`, reached through JNI), sound paused in the background and logging to logcat.
+//! and the tilt sensor (in Kotlin, `MainActivity`, reached through JNI), sound paused in the background and
+//! logging to logcat.
 //!
 //! The model is the desktop's (`monkey-ball-rs/crates/mb-desktop/src/lib.rs`): the first start imports the
 //! files the game uses out of the player's disc image into `game.pack` in the app's internal storage, and
@@ -30,6 +31,7 @@ use mb_app::import_screen::{DiscImage, ImageSlot, ImportScreen};
 use mb_app::input::{Action, InputState};
 use mb_app::menu::Menu;
 use mb_app::perf::{FrameSample, PerfStats};
+use mb_app::tilt::TiltSteering;
 use mb_app::ui::Insets;
 use mb_assets::disc::{DiscStream, FileStream};
 use mb_driver::Platform;
@@ -147,45 +149,89 @@ extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeBack(
     BACK.store(true, Ordering::Relaxed);
 }
 
-/// Call a method of the activity (`MainActivity`) from the game thread: `void method()`, or
-/// `void method(String)` with `text`.
-fn call_activity(app: &AndroidApp, method: &str, text: Option<&str>) -> jni::errors::Result<()> {
+/// The latest orientation sample the game thread has not taken yet: W3C `deviceorientation` beta and gamma
+/// in degrees and the screen's rotation (0, 90, 180, 270). Written on the UI thread while tilt steers,
+/// taken in `poll_input`.
+static TILT: Mutex<Option<(f32, f32, i32)>> = Mutex::new(None);
+
+/// `MainActivity.nativeTilt(beta, gamma, screenAngle)`, on the UI thread.
+#[unsafe(no_mangle)]
+extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeTilt(
+    _env: JNIEnv,
+    _this: JObject,
+    beta: jni::sys::jfloat,
+    gamma: jni::sys::jfloat,
+    screen_angle: jni::sys::jint,
+) {
+    *TILT.lock().unwrap_or_else(|e| e.into_inner()) = Some((beta, gamma, screen_angle));
+}
+
+/// Run `call` with a JNI environment and the activity (`MainActivity`), on the game thread.
+fn with_activity<T>(
+    app: &AndroidApp,
+    call: impl FnOnce(&mut JNIEnv, &JObject) -> jni::errors::Result<T>,
+) -> jni::errors::Result<T> {
     // SAFETY: android-activity keeps the VM and a global reference to the activity valid while
     // `android_main` runs, which is the only time the game thread exists.
     let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) }?;
     let activity = unsafe { JObject::from_raw(app.activity_as_ptr().cast()) };
     let mut env = vm.attach_current_thread()?;
-    match text {
-        None => env.call_method(&activity, method, "()V", &[])?,
-        Some(text) => {
-            let text = env.new_string(text)?;
-            env.call_method(
-                &activity,
-                method,
-                "(Ljava/lang/String;)V",
-                &[(&text).into()],
-            )?
-        }
-    };
-    Ok(())
+    call(&mut env, &activity)
+}
+
+/// Call a method of the activity from the game thread: `void method()`, or `void method(String)` with
+/// `text`.
+fn call_activity(app: &AndroidApp, method: &str, text: Option<&str>) -> jni::errors::Result<()> {
+    with_activity(app, |env, activity| {
+        match text {
+            None => env.call_method(activity, method, "()V", &[])?,
+            Some(text) => {
+                let text = env.new_string(text)?;
+                env.call_method(activity, method, "(Ljava/lang/String;)V", &[(&text).into()])?
+            }
+        };
+        Ok(())
+    })
 }
 
 /// `MainActivity.onNavDepth(depth)`: whether the system "back" stays in the game (above 0) or leaves it.
 fn report_nav_depth(app: &AndroidApp, depth: u32) {
-    let call = || -> jni::errors::Result<()> {
-        // SAFETY: as in `call_activity`.
-        let vm = unsafe { JavaVM::from_raw(app.vm_as_ptr().cast()) }?;
-        let activity = unsafe { JObject::from_raw(app.activity_as_ptr().cast()) };
-        let mut env = vm.attach_current_thread()?;
-        let depth = depth.min(i32::MAX as u32) as i32;
-        env.call_method(&activity, "onNavDepth", "(I)V", &[depth.into()])?;
-        Ok(())
-    };
-    if let Err(e) = call() {
+    let depth = depth.min(i32::MAX as u32) as i32;
+    let call = with_activity(app, |env, activity| {
+        env.call_method(activity, "onNavDepth", "(I)V", &[depth.into()])
+            .map(drop)
+    });
+    if let Err(e) = call {
         log(
             LOG_ERROR,
             &format!("cannot call MainActivity.onNavDepth: {e}"),
         );
+    }
+}
+
+/// `MainActivity.hasTiltSensor()`: whether the device reports its orientation, so tilt can steer
+/// (`Caps::tilt`, which shows the Controls row in the options).
+fn has_tilt_sensor(app: &AndroidApp) -> bool {
+    let call = with_activity(app, |env, activity| {
+        env.call_method(activity, "hasTiltSensor", "()Z", &[])?.z()
+    });
+    call.unwrap_or_else(|e| {
+        log(
+            LOG_ERROR,
+            &format!("cannot call MainActivity.hasTiltSensor: {e}"),
+        );
+        false
+    })
+}
+
+/// `MainActivity.setTilt(on)`: listen to the orientation sensor and keep the screen from rotating, or stop.
+fn set_tilt(app: &AndroidApp, on: bool) {
+    let call = with_activity(app, |env, activity| {
+        env.call_method(activity, "setTilt", "(Z)V", &[on.into()])
+            .map(drop)
+    });
+    if let Err(e) = call {
+        log(LOG_ERROR, &format!("cannot call MainActivity.setTilt: {e}"));
     }
 }
 
@@ -267,6 +313,9 @@ struct Android {
     nav_depth: u32,
     /// Cancel is held for one frame after a system "back"; released at the next `poll_input`.
     back_down: bool,
+    /// Steering by device tilt: on while the player chose it in the options, fed by the activity's
+    /// orientation sensor (`nativeTilt`).
+    tilt: TiltSteering,
     /// Frame timings of play, summed up in logcat every `PERF_PERIOD` (`perf:` lines).
     perf: PerfStats,
     perf_since: Option<Instant>,
@@ -311,6 +360,9 @@ impl Platform for Android {
             },
             None => {}
         }
+        if let Some((beta, gamma, angle)) = TILT.lock().unwrap_or_else(|e| e.into_inner()).take() {
+            self.tilt.sample(beta, gamma, angle);
+        }
         for command in host.drain() {
             match command {
                 Command::PickImage => self.start_picker(),
@@ -322,9 +374,21 @@ impl Platform for Android {
                     host.info
                         .insert(0, format!("Game data: {} MB", bytes >> 20));
                 }
-                _ => {}
+                // The menu says how the player steers at its start and whenever the option changes.
+                Command::Tilt { enabled, range_deg } => {
+                    if enabled != self.tilt.enabled() {
+                        log(LOG_INFO, &format!("tilt steering: {enabled}"));
+                        set_tilt(&self.app, enabled);
+                    }
+                    self.tilt.set_enabled(enabled, range_deg);
+                }
+                // A stage starts (or the player taps the recentre button): the pose held now is level.
+                Command::CalibrateTilt => self.tilt.calibrate(),
+                // The system bars are hidden for good (MainActivity): no fullscreen option.
+                Command::SetFullscreen(_) => {}
             }
         }
+        self.tilt.apply(input);
     }
 
     fn insets(&mut self, _window: &Window) -> Insets {
@@ -421,6 +485,7 @@ fn run(app: AndroidApp) -> Result<(), String> {
     let mut host = Host::new(
         Caps {
             remove_data: true,
+            tilt: has_tilt_sensor(&app),
             ..Caps::default()
         },
         Vec::new(),
@@ -453,6 +518,7 @@ fn run(app: AndroidApp) -> Result<(), String> {
         top: "",
         nav_depth: 0,
         back_down: false,
+        tilt: TiltSteering::default(),
         perf: PerfStats::new(),
         perf_since: None,
     };

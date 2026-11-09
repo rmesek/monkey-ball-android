@@ -27,7 +27,7 @@ Założenia:
 | Narzędzie | Wersja |
 |---|---|
 | Android Studio | 2026.2.2 |
-| Android Gradle Plugin / Gradle | 9.5.0 / 9.6.0 |
+| Android Gradle Plugin / Gradle | 9.5.1 / 9.8.2 (od kroku 17; wcześniej 9.5.0 / 9.6.0) |
 | Android SDK Platform | 37 |
 | NDK | 30.0.16248370 |
 | Rust | 1.98.1 (stable), targety `aarch64-linux-android` i `x86_64-linux-android` |
@@ -411,3 +411,46 @@ z tła, więc te były winą emulatora) i sterowanie kulką. Etapy 1 i 2 są zam
 
 Strefa joysticka (lewa dolna część ekranu) zostaje bez zmian: wynika z silnika, a zmiana wymagałaby zmian w
 `monkey-ball-rs`, których port nie robi.
+
+## Krok 17: żyroskop (etap 3)
+
+Silnik ma już całe sterowanie przechyleniem, napisane dla przeglądarki:
+- opcję „Controls: stick / tilt” i zakres przechylenia w menu, widoczne tylko przy `Caps::tilt`,
+- polecenia `Command::Tilt { enabled, range_deg }` (start menu i każda zmiana opcji) oraz `Command::CalibrateTilt` (start etapu, przycisk „+” w grze),
+- `TiltSteering`, czyli zamianę kątów na kierunek z martwą strefą i kalibracją.
+
+Port dostarcza więc tylko kąty z czujnika i blokuje obrót ekranu, tak jak strona WWW (`web/main.js`) dostarcza zdarzenia `deviceorientation`.
+
+Co powstało:
+- **Kotlin, `MainActivity`:**
+  - `hasTiltSensor()` jest wołane z Rusta raz, przed startem gry, i ustawia `Caps::tilt`.
+  - `setTilt(on)` jest wołane z Rusta, gdy menu zmienia sposób sterowania. Rejestruje lub wyrejestrowuje słuchacza czujnika i ustawia `requestedOrientation` na `SCREEN_ORIENTATION_LOCKED` (zostaje bieżący obrót) albo `UNSPECIFIED`.
+  - Czujnik: `TYPE_GAME_ROTATION_VECTOR`, a gdy go nie ma, `TYPE_ROTATION_VECTOR`. Wariant „game” nie używa kompasu: gra potrzebuje tylko kierunku „w dół”, a magnes w pobliżu nie obróci wtedy odczytu.
+  - Czujnik działa tylko przy aktywności na wierzchu (`onResume` / `onPause`), więc w tle nie zużywa baterii.
+- **Kotlin, `Tilt.kt`:**
+  - `deviceTilt` liczy z macierzy obrotu (`getRotationMatrixFromVector`) kąty beta i gamma tak samo jak Chromium dla `deviceorientation`.
+  - `getOrientation` odpadło, bo jego pitch kończy się na ±90°: telefon przechylony za pion sterowałby w złą stronę.
+  - Obrót ekranu (`Display.rotation` × 90) idzie razem z kątami, bo `TiltSteering` sam zamienia osie w poziomie.
+- **Rust, `native/src/lib.rs`:**
+  - `nativeTilt` zapisuje ostatnią próbkę w `Mutex`.
+  - `poll_input` przekazuje ją do `TiltSteering`, obsługuje oba polecenia i co klatkę wpisuje osie `TiltX`/`TiltY` do wejścia gry.
+  - Wywołania JNI mają teraz wspólną funkcję `with_activity`.
+- Nowych bibliotek nie ma.
+
+Testy (15 z 15 przechodzi):
+
+| Test | Co sprawdza |
+|---|---|
+| `TiltTest` (6 testów, bez uruchamiania gry) | kąty `deviceTilt` dla znanych obrotów: płasko, przód/tył, lewo/prawo, oba naraz, za pionem, ekranem w dół |
+| `tiltSteeringListensToTheSensorAndKeepsTheRotation` | Options → Controls (klawisze w menu): włączone przechylenie, zablokowany obrót, próbki z czujnika; w tle brak próbek, po powrocie znowu są; po wyłączeniu obrót odblokowany i brak próbek |
+
+Sprawdzone ręcznie na emulatorze (czujniki ustawiane z komputera: `adb emu sensor set acceleration`):
+- Options pokazuje „CONTROLS TILT” i „TILT RANGE 25 DEG”. W etapie zamiast gałki jest przycisk „+” (kalibracja).
+- Emulator w pozycji wyjściowej: kulka stoi (00 mph).
+- Emulator przechylony o 45° do przodu: kulka sama jedzie prosto do mety (GOAL, 16,65 s).
+- Obrót systemu do poziomu przy włączonym przechyleniu: gra zostaje w pionie. Po wyłączeniu przechylenia przechodzi w poziom, a po ponownym włączeniu zostaje w poziomie.
+- W logcat są linie `tilt steering: true/false`, bez błędów.
+
+Jeszcze nie sprawdzone: telefon, a w szczególności kierunki sterowania w poziomie. Na emulatorze sprawdzony był tylko pion.
+
+Przy okazji: Android Studio podniósł AGP do 9.5.1 i Gradle do 9.8.2. Lint zgłasza tylko nowsze wersje (Gradle 9.9.0, games-activity 4.4.2); ostrzeżeń w kodzie nie ma. Ostrzeżenie Gradle o przestarzałym `Configuration.setVisible` pochodzi z AGP, nie z naszego skryptu.

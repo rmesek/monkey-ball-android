@@ -1,6 +1,11 @@
 package io.github.rmesek.monkeyball
 
 import android.annotation.SuppressLint
+import android.content.pm.ActivityInfo
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
@@ -8,9 +13,11 @@ import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.lifecycle.Lifecycle
 import com.google.androidgamesdk.GameActivity
 import kotlin.system.exitProcess
 
@@ -19,8 +26,8 @@ import kotlin.system.exitProcess
  * its `android_main` on a thread of its own; the game draws into this activity's surface.
  *
  * This class does what only the Android side can: the document picker for the disc image, the system
- * "back", full screen and the space taken by system bars, messages to the player; and it records what the
- * game reports (GameEvents).
+ * "back", full screen and the space taken by system bars, the orientation sensor for tilt steering, messages
+ * to the player; and it records what the game reports (GameEvents).
  */
 class MainActivity : GameActivity() {
 
@@ -38,6 +45,35 @@ class MainActivity : GameActivity() {
         override fun handleOnBackPressed() = nativeBack()
     }
 
+    private val sensors by lazy { getSystemService(SensorManager::class.java) }
+
+    /**
+     * The device's orientation without the compass (it only needs to know which way is down, and magnets
+     * nearby would turn it), or with it where there is no other.
+     */
+    private val orientationSensor by lazy {
+        sensors.getDefaultSensor(Sensor.TYPE_GAME_ROTATION_VECTOR)
+            ?: sensors.getDefaultSensor(Sensor.TYPE_ROTATION_VECTOR)
+    }
+
+    /** The game steers by tilt (the player chose it in the options); set from Rust through setTilt. */
+    private var tilt = false
+
+    private val tiltListener = object : SensorEventListener {
+        private val rotation = FloatArray(9)
+
+        override fun onSensorChanged(event: SensorEvent) {
+            SensorManager.getRotationMatrixFromVector(rotation, event.values)
+            val (beta, gamma) = deviceTilt(rotation)
+            // How far the screen is turned from the device's natural orientation, as the game's maths wants it.
+            val screenAngle = (ContextCompat.getDisplayOrDefault(this@MainActivity).rotation) * 90
+            nativeTilt(beta, gamma, screenAngle)
+            GameEvents.tiltSamples.incrementAndGet()
+        }
+
+        override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
@@ -51,6 +87,24 @@ class MainActivity : GameActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+
+    // The sensor only while the game is in front: no samples (and no battery) for a game in the background.
+
+    override fun onResume() {
+        super.onResume()
+        listenToTilt(tilt)
+    }
+
+    override fun onPause() {
+        listenToTilt(false)
+        super.onPause()
+    }
+
+    private fun listenToTilt(on: Boolean) {
+        val sensor = orientationSensor ?: return
+        sensors.unregisterListener(tiltListener)
+        if (on) sensors.registerListener(tiltListener, sensor, SensorManager.SENSOR_DELAY_GAME)
     }
 
     /**
@@ -82,6 +136,26 @@ class MainActivity : GameActivity() {
             .setNegativeButton(android.R.string.cancel) { _, _ -> nativeImagePicked(-1) }
             .setOnCancelListener { nativeImagePicked(-1) }
             .show()
+    }
+
+    /**
+     * Called from Rust (game thread) once, before the game starts: whether tilt can steer. The options show
+     * the choice of controls only then.
+     */
+    @Suppress("unused")
+    fun hasTiltSensor() = orientationSensor != null
+
+    /**
+     * Called from Rust (game thread) when the game starts or stops steering by tilt. While it does, the screen
+     * keeps the rotation it has: turning the phone to steer must not turn the picture as well.
+     */
+    @Suppress("unused")
+    fun setTilt(on: Boolean) = runOnUiThread {
+        tilt = on
+        GameEvents.tilt = on
+        requestedOrientation =
+            if (on) ActivityInfo.SCREEN_ORIENTATION_LOCKED else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        listenToTilt(on && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))
     }
 
     // Reports from Rust (game thread, through JNI). Kept in GameEvents for the instrumented tests.
@@ -145,4 +219,10 @@ class MainActivity : GameActivity() {
 
     /** Space covered by system bars and cutouts, in pixels. Implemented in native/src/lib.rs. */
     private external fun nativeInsets(left: Int, top: Int, right: Int, bottom: Int)
+
+    /**
+     * An orientation sample: beta and gamma in degrees (deviceTilt) and the screen's rotation (0, 90, 180,
+     * 270). Implemented in native/src/lib.rs.
+     */
+    private external fun nativeTilt(beta: Float, gamma: Float, screenAngle: Int)
 }

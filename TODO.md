@@ -69,11 +69,13 @@ monkey-ball-android/
 
 ## Etap 3: żyroskop (opcjonalne)
 
-- [ ] `SensorManager` z `TYPE_ROTATION_VECTOR`.
-  - Z `getRotationMatrixFromVector` i `getOrientation` wyznaczyć beta i gamma w stopniach oraz obrót ekranu.
-  - Wartości trafiają przez `external fun nativeTilt(...)` do zmiennych atomowych, a w `poll_input` do `TiltSteering`.
-  - Ustawić `Caps::tilt`.
-- [ ] Gdy sterowanie żyroskopem jest włączone, ekran nie może się obracać: zablokować bieżącą orientację (np. `requestedOrientation = SCREEN_ORIENTATION_LOCKED`) i odblokować po powrocie do sterowania dotykiem.
+- [x] `SensorManager` z `TYPE_GAME_ROTATION_VECTOR` (bez kompasu), a gdy go nie ma, `TYPE_ROTATION_VECTOR`.
+  - Z `getRotationMatrixFromVector` beta i gamma w stopniach jak w przeglądarce (`deviceTilt` w `Tilt.kt`, bez `getOrientation`) oraz obrót ekranu.
+  - Wartości trafiają przez `external fun nativeTilt(...)` do `Mutex`, a w `poll_input` do `TiltSteering`.
+  - `Caps::tilt` z `MainActivity.hasTiltSensor()`.
+- [x] Gdy sterowanie żyroskopem jest włączone, ekran nie może się obracać: `requestedOrientation = SCREEN_ORIENTATION_LOCKED`, odblokowanie po powrocie do sterowania dotykiem.
+- [x] Testy `TiltTest` (kąty) i `tiltSteeringListensToTheSensorAndKeepsTheRotation`; kulka sterowana przechyleniem emulatora sprawdzona ręcznie.
+- [ ] Telefon: sterowanie przechyleniem w pionie i w poziomie (sprawdzić ręcznie).
 
 ## Etap 4: pomiary wariantu natywnego (opcjonalne)
 

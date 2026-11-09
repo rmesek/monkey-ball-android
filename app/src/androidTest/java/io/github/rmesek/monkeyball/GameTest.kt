@@ -100,13 +100,7 @@ class GameTest {
         assumeTrue("no game data: run importsTheDiscImageAndShowsTheMenu first", pack.exists())
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         waitFor("the title menu", 30) { GameEvents.state == "menu" }
-        // Course play -> Beginner -> start: Enter until a stage runs.
-        var presses = 0
-        while (GameEvents.state != "play" && presses++ < 8) {
-            shell("input keyevent KEYCODE_ENTER")
-            Thread.sleep(1500)
-        }
-        waitFor("a stage", 20) { GameEvents.state == "play" }
+        startAStage()
         Thread.sleep(2000)
         assertTrue("a stage is on screen", screenHasPicture())
 
@@ -122,12 +116,13 @@ class GameTest {
     }
 
     /**
-     * Options -> Controls: tilt, and back to the stick. While tilt steers, the orientation sensor feeds the
-     * game (only while the game is in front) and the screen keeps its rotation. The test ends with the stick
-     * again, as the other tests expect.
+     * Options -> Controls: tilt, a stage, and back to the stick. Tilt steers only in a stage: there the
+     * orientation sensor feeds the game (only while the game is in front) and the screen keeps its rotation;
+     * in the menus there are no samples and the screen rotates as usual. The test ends with the stick again,
+     * as the other tests expect.
      */
     @Test
-    fun tiltSteeringListensToTheSensorAndKeepsTheRotation() {
+    fun tiltSteeringListensToTheSensorAndKeepsTheRotationInAStage() {
         assumeTrue("no game data: run importsTheDiscImageAndShowsTheMenu first", pack.exists())
         val scenario = ActivityScenario.launch(MainActivity::class.java)
         waitFor("the title menu", 30) { GameEvents.state == "menu" }
@@ -135,12 +130,18 @@ class GameTest {
         assertTrue("steering by the stick at first", !GameEvents.tilt)
         assertEquals(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, requestedOrientation(scenario))
 
-        // The title's third entry, then the options' fifth row (unlock all, stick curve, music, sound, controls).
-        repeat(2) { shell("input keyevent KEYCODE_DPAD_DOWN") }
-        shell("input keyevent KEYCODE_ENTER")
-        waitFor("the options", 10) { GameEvents.navDepth > 0 }
-        repeat(4) { shell("input keyevent KEYCODE_DPAD_DOWN") }
-        shell("input keyevent KEYCODE_ENTER")
+        // Tilt chosen: the menus still rotate and the sensor stays off.
+        toggleControls()
+        Thread.sleep(1500)
+        assertTrue("no tilt steering in the menus", !GameEvents.tilt)
+        assertEquals("rotation free in the menus", ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, requestedOrientation(scenario))
+        assertEquals("samples in the menus", 0, GameEvents.tiltSamples.get())
+
+        // Out of the options (Options stays highlighted), up to Course play, and into a stage.
+        shell("input keyevent KEYCODE_BACK")
+        waitFor("the title again", 10) { GameEvents.navDepth == 0 }
+        repeat(2) { shell("input keyevent KEYCODE_DPAD_UP") }
+        startAStage()
         waitFor("tilt steering", 10) { GameEvents.tilt }
         assertEquals("the rotation is kept", ActivityInfo.SCREEN_ORIENTATION_LOCKED, requestedOrientation(scenario))
         waitFor("orientation samples", 10) { GameEvents.tiltSamples.get() > 10 }
@@ -153,15 +154,32 @@ class GameTest {
         assertEquals("samples in the background", away, GameEvents.tiltSamples.get())
         scenario.moveToState(Lifecycle.State.RESUMED)
         waitFor("samples after coming back", 10) { GameEvents.tiltSamples.get() > away + 10 }
+        assertEquals("the rotation is still kept", ActivityInfo.SCREEN_ORIENTATION_LOCKED, requestedOrientation(scenario))
 
-        // The same row again: the stick.
-        shell("input keyevent KEYCODE_ENTER")
-        waitFor("stick steering again", 10) { !GameEvents.tilt }
+        // The game paused itself in the background. Quit, and "Quit course" in the question: the title, with
+        // the rotation free and no samples. Keys with a pause between them, as a player presses them.
+        Thread.sleep(1000)
+        for (key in listOf("DPAD_DOWN", "DPAD_DOWN", "ENTER", "DPAD_DOWN", "ENTER")) {
+            shell("input keyevent KEYCODE_$key")
+            Thread.sleep(700)
+        }
+        waitFor("the title after quitting", 10) { GameEvents.state == "menu" && GameEvents.navDepth == 0 }
+        waitFor("no tilt steering after the stage", 10) { !GameEvents.tilt }
         assertEquals("rotation free again", ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, requestedOrientation(scenario))
         Thread.sleep(500)
         val off = GameEvents.tiltSamples.get()
         Thread.sleep(1000)
-        assertEquals("samples after switching tilt off", off, GameEvents.tiltSamples.get())
+        assertEquals("samples after the stage", off, GameEvents.tiltSamples.get())
+
+        // Back to the stick (the title has Course play highlighted after quitting), checked in a stage.
+        toggleControls()
+        shell("input keyevent KEYCODE_BACK")
+        waitFor("the title again", 10) { GameEvents.navDepth == 0 }
+        repeat(2) { shell("input keyevent KEYCODE_DPAD_UP") }
+        startAStage()
+        Thread.sleep(2000)
+        assertTrue("stick steering in a stage", !GameEvents.tilt)
+        assertEquals("rotation free with the stick", ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED, requestedOrientation(scenario))
         assertNoErrors()
     }
 
@@ -193,6 +211,28 @@ class GameTest {
     }
 
     // ---- helpers -------------------------------------------------------------------------------------
+
+    /**
+     * From the title with Course play highlighted: the title's third entry, then the options' fifth row
+     * (unlock all, stick curve, music, sound, controls), which switches between the stick and tilt.
+     */
+    private fun toggleControls() {
+        repeat(2) { shell("input keyevent KEYCODE_DPAD_DOWN") }
+        shell("input keyevent KEYCODE_ENTER")
+        waitFor("the options", 10) { GameEvents.navDepth > 0 }
+        repeat(4) { shell("input keyevent KEYCODE_DPAD_DOWN") }
+        shell("input keyevent KEYCODE_ENTER")
+    }
+
+    /** From the title with Course play highlighted: Course play -> Beginner -> start, Enter until a stage runs. */
+    private fun startAStage() {
+        var presses = 0
+        while (GameEvents.state != "play" && presses++ < 8) {
+            shell("input keyevent KEYCODE_ENTER")
+            Thread.sleep(1500)
+        }
+        waitFor("a stage", 20) { GameEvents.state == "play" }
+    }
 
     private fun requestedOrientation(scenario: ActivityScenario<MainActivity>): Int {
         var orientation = 0

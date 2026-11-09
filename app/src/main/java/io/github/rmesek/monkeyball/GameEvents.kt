@@ -20,7 +20,10 @@ object GameEvents {
     @Volatile
     var navDepth: Int = 0
 
-    /** The game steers by device tilt: the activity listens to the orientation sensor and keeps the rotation. */
+    /**
+     * The game steers by device tilt (chosen in the options, and a stage runs): the activity listens to the
+     * orientation sensor and keeps the rotation.
+     */
     @Volatile
     var tilt = false
 

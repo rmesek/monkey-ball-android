@@ -468,3 +468,14 @@ Teraz blokada obowiązuje tylko w etapie:
 | Test | Co sprawdza |
 |---|---|
 | `tiltSteeringListensToTheSensorAndKeepsTheRotationInAStage` | przechylenie wybrane w menu: obrót wolny i brak odczytów; w etapie: obrót zablokowany i odczyty z czujnika, w tle brak odczytów, po powrocie znowu są (gra w pauzie); po wyjściu z etapu przez pauzę: obrót wolny i brak odczytów; po powrocie do gałki etap bez blokady |
+
+## Krok 19: przegląd kodu aplikacji
+
+Przegląd kodu Kotlin, Rust (`native/`) i konfiguracji pod kątem dobrych praktyk Androida, bez zmian w silniku.
+
+Poprawione:
+- **Awaria przy zakończeniu gry.** Anulowanie wyboru pliku przy pierwszym starcie i „Remove game data” kończą `android_main` przez zakończenie procesu. `std::process::exit` uruchamiał destruktory statyczne bibliotek, a jeden z nich zwalniał referencję JNI z cudzym `JNIEnv`. W wersji debug (CheckJNI) kończyło się to SIGABRT i raportem awarii. Teraz `_exit(0)` z bionic: proces kończy się od razu, bez raportu („exited cleanly (0)”). Wszystko, co trzeba zachować, jest wtedy już zapisane.
+- **Reguła R8** (`rules.keep`) zachowywała tylko metody `void`, a `hasTiltSensor()` zwraca `boolean`. Dziś R8 i tak nie zmienia klas aplikacji (`packageScope` obejmuje tylko androidx i kotlin), ale reguła zachowuje teraz wszystkie publiczne metody `MainActivity`. Usunięte komentarze z szablonu.
+- Usunięta nieużywana przestrzeń nazw `tools` w manifeście.
+
+Bez zmian, bo są proste i zgodne z praktykami: jedna aktywność `GameActivity`, wywołania JNI w obie strony bez dodatkowych bibliotek, czujnik tylko w etapie i tylko na wierzchu, `OnBackPressedCallback` zależny od `nav_depth`, `dataExtractionRules`, `FLAG_KEEP_SCREEN_ON`, immersive przez `WindowInsetsControllerCompat`.

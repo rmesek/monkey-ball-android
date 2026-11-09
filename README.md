@@ -31,3 +31,4 @@ Opcjonalne:
 | 2026-11-02 | Projekt w Android Studio z silnikiem gry jako submodułem, budowanym z poziomu Gradle; aplikacja z aktywnością `GameActivity` |
 | 2026-11-02 | Pierwsze uruchomienie na emulatorze: grafika przez Vulkan (OpenGL ES w razie problemów), wczytanie danych gry z obrazu płyty, sterowanie dotykiem, dźwięk |
 | 2026-11-02 | Testy automatyczne uruchamiane z Android Studio; poprawki działania na Androidzie (paski systemowe, przycisk wstecz, powrót z tła, ponowne otwarcie) i pomiar wydajności |
+| 2026-11-09 | Sterowanie żyroskopem (przechylenie telefonu) jako opcja w grze; obraz nie obraca się podczas sterowania; testy automatyczne |

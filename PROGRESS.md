@@ -500,3 +500,22 @@ Telefon tylko uruchamia gotowy APK: bez USB, adb, logcat i Profilera. Dlatego po
 - **Rust** (`on_frame`): podsumowanie co 5 s gry, te same liczby co w logcat (`perf:`, format linii bez zmian), trafia też do `MainActivity.onPerf` jako kilka linii z nazwą GPU.
 - **Kotlin** (`Metrics.kt`, `MetricsOverlay`): `TextView` na dole ekranu, dodany przez `addContentView` tylko przy włączonych pomiarach; dopisuje pamięć aplikacji (PSS, `Debug.getMemoryInfo`). Pamięć jest odczytywana w wątku UI, nie w wątku gry, żeby odczyt nie pojawił się jako wolna klatka w samych pomiarach.
 - Test `metricsShortcutShowsFrameStatistics` (start z dodatkiem jak ze skrótu, etap, statystyki z GPU i pamięcią) oraz sprawdzenie w `laterStartsGoStraightToTheMenu`, że zwykły start nie pokazuje nakładki. 16 testów zielonych na emulatorze; skrót sprawdzony ręcznie w launcherze emulatora.
+
+## Krok 22: przegląd rozwiązanych problemów i dobrych praktyk
+
+Przegląd, czy wcześniejsze poprawki usuwają przyczyny, a nie objawy, i porównanie z typowymi praktykami Rust/Android.
+
+**Poprawione: zamknięcie gry przy zmianie ustawień systemu.**
+- Objaw (odtworzony na emulatorze): zmiana rozmiaru czcionki przy otwartej grze zamykała ją całkowicie (`app died, no saved state`).
+- Przyczyna: `configChanges` w manifeście obejmowało obrót, rozmiar i `uiMode`, ale nie język, rozmiar i grubość czcionki, kierunek tekstu i kilka innych. Taka zmiana odtwarza aktywność, a `onDestroy` kończy proces (krok 12).
+- Poprawka: `configChanges` wymienia teraz wszystkie zmiany znane platformie. Gra nie używa zasobów Androida zależnych od języka czy czcionki, więc nic nie musi się przeładować.
+- Sprawdzone: ten sam proces po zmianie czcionki, języka aplikacji i trybu nocnego; 16 testów zielonych.
+
+**Dokładna przyczyna awarii z kroku 19.** Ślad stosu: `android_main` → `exit` → `__cxa_finalize` → destruktor statyczny → `DeleteGlobalRef`. To globalny `s_gameTextInput` z Android Games SDK (kompilowanego przez `android-activity`), który trzyma `JNIEnv` wątku głównego. `exit()` działa więc tylko na wątku głównym (tak kończy `MainActivity.onDestroy`), a na wątku gry trzeba `_exit`. Android i tak zwykle kończy procesy aplikacji bez destruktorów (SIGKILL).
+
+**Zgodne z praktykami:** `cargo-ndk` uruchamiany z Gradle przed każdym buildem; biblioteki `.so` wyrównane do stron 16 KB (`llvm-readelf`: segmenty `LOAD` z wyrównaniem `0x4000`, domyślnie od NDK r28); bez paniki przez granicę FFI (funkcje `native*` nie mają czego spanikować, błędy JNI są logowane); testy logiki na hoście w CI silnika (`cargo xtask ci`).
+
+**Świadomie inaczej:**
+- Bez Compose: interfejs gry rysuje silnik (wspólny z desktopem i przeglądarką), a Kotlin obsługuje tylko to, co wymaga Androida.
+- Bez UniFFI: wątek i pętlę gry ma Rust, który woła aktywność; Kotlin wysyła tylko 4 proste wiadomości. UniFFI dodałby generator kodu i bibliotekę JNA. Ręczna warstwa JNI ma około 120 linii w dwóch miejscach (`Inbox`, `call`).
+- Debug buduje obie architektury, a projekt Android nie ma własnego CI: obie rzeczy dodałyby konfigurację, a aplikacji nie upraszczają.

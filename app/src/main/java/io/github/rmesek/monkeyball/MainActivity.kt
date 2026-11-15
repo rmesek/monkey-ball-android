@@ -1,6 +1,7 @@
 package io.github.rmesek.monkeyball
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.hardware.Sensor
 import android.hardware.SensorEvent
@@ -79,8 +80,18 @@ class MainActivity : GameActivity() {
         override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
     }
 
+    /** Frame statistics on screen, when started from the "Play with metrics" shortcut; null otherwise. */
+    @Volatile
+    internal var metrics: MetricsOverlay? = null
+        private set
+
+    private fun showMetricsIfRequested(intent: Intent?) {
+        if (metrics == null && MetricsOverlay.requested(intent)) metrics = MetricsOverlay(this)
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        showMetricsIfRequested(intent)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onBackPressedDispatcher.addCallback(this, back)
         // The game's view has the focus and fills the screen. Without this, Android draws its translucent
@@ -92,6 +103,12 @@ class MainActivity : GameActivity() {
             hide(WindowInsetsCompat.Type.systemBars())
             systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
         }
+    }
+
+    /** The shortcut used while the game already runs (singleTask): the same activity, maybe with metrics. */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        showMetricsIfRequested(intent)
     }
 
     // The sensor only while the game is in front: no samples (and no battery) for a game in the background.
@@ -176,6 +193,12 @@ class MainActivity : GameActivity() {
         GameEvents.adapter = adapter
     }
 
+    /** Frame statistics of the last 5 s of play, several lines; shown only with metrics on. */
+    @Suppress("unused")
+    fun onPerf(summary: String) {
+        metrics?.show(summary)
+    }
+
     /** Another game state is on top ("import", "menu", "play"...). */
     @Suppress("unused")
     fun onGameState(name: String) {
@@ -218,6 +241,7 @@ class MainActivity : GameActivity() {
             WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
         )
         nativeInsets(covered.left, covered.top, covered.right, covered.bottom)
+        metrics?.keepAbove(covered.bottom)
         return result
     }
 

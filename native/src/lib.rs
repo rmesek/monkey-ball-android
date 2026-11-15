@@ -306,9 +306,11 @@ struct Android {
     /// Tilt steers now: chosen, and a stage runs. The activity listens to the sensor and keeps the
     /// rotation exactly while this is on (`MainActivity.setTilt`).
     tilt_steering: bool,
-    /// Frame timings of play, summed up in logcat every `PERF_PERIOD` (`perf:` lines).
+    /// Frame timings of play, summed up every `PERF_PERIOD`: logcat `perf:` lines and the on-screen metrics.
     perf: PerfStats,
     perf_since: Option<Instant>,
+    /// The GPU adapter's description (`on_ready`), shown with the frame statistics.
+    gpu: String,
 }
 
 /// How often the frame timings of play go to logcat.
@@ -434,6 +436,7 @@ impl Platform for Android {
 
     fn on_ready(&mut self, gpu: &str) {
         log(LOG_INFO, &format!("adapter: {gpu}"));
+        self.gpu = gpu.to_owned();
         call(&self.app, "onGameReady", Arg::Text(gpu));
     }
 
@@ -444,20 +447,25 @@ impl Platform for Android {
             return;
         }
         let s = self.perf.summary();
+        let lines = [
+            format!("{:.1} fps", 1000.0 / s.avg_ms.max(0.001)),
+            format!(
+                "frame p50 {:.1} p99 {:.1} worst {:.1} ms",
+                s.p50_ms, s.p99_ms, s.worst_ms
+            ),
+            format!(
+                "update {:.2} render {:.2} ms avg, {} draws",
+                s.update_avg_ms, s.render_avg_ms, s.draws
+            ),
+        ];
+        // One line in logcat (on the emulator), several on the phone's screen when metrics are on
+        // (`MainActivity.onPerf`, Metrics.kt), with the GPU the numbers are from.
         log(
             LOG_INFO,
-            &format!(
-                "perf: {} frames, {:.1} fps, frame p50 {:.1} p99 {:.1} worst {:.1} ms, update {:.2} render {:.2} ms avg, {} draws",
-                s.frames,
-                1000.0 / s.avg_ms.max(0.001),
-                s.p50_ms,
-                s.p99_ms,
-                s.worst_ms,
-                s.update_avg_ms,
-                s.render_avg_ms,
-                s.draws,
-            ),
+            &format!("perf: {} frames, {}", s.frames, lines.join(", ")),
         );
+        let screen = format!("{}\n{}", lines.join("\n"), self.gpu);
+        call(&self.app, "onPerf", Arg::Text(&screen));
         self.perf.reset();
         self.perf_since = None;
     }
@@ -525,6 +533,7 @@ fn run(app: AndroidApp) -> Result<(), String> {
         tilt_steering: false,
         perf: PerfStats::new(),
         perf_since: None,
+        gpu: String::new(),
     };
     log(LOG_INFO, &format!("backend: {:?}", platform.backends));
     let platform = mb_driver::run(event_loop, platform, host, content, initial)?;

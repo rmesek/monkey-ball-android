@@ -17,3 +17,8 @@ local.properties
 # Rust: build output of native/ and the libraries cargo-ndk copies into the app.
 /native/target
 /app/src/main/jniLibs
+
+# Signed release builds (Build -> Generate Signed App Bundle or APK) and signing keys: never in the repository.
+/app/release
+*.jks
+*.keystore

@@ -11,11 +11,12 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MonkeyBall">
 
-        <!-- The game. Rotation and resizing reach the Rust side as a new surface size instead of a new
-             activity: the engine runs once per process (see native/src/lib.rs). -->
+        <!-- The game. No configuration change recreates the activity: the engine runs once per process
+             (see native/src/lib.rs), and onDestroy ends it. Rotation and resizing reach the Rust side as a
+             new surface size; language, font size and the like do not concern the game at all. -->
         <activity
             android:name=".MainActivity"
-            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density|uiMode"
+            android:configChanges="mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|screenLayout|fontScale|uiMode|orientation|density|screenSize|smallestScreenSize|layoutDirection|colorMode|fontWeightAdjustment|grammaticalGender|assetsPaths"
             android:exported="true"
             android:launchMode="singleTask">
             <!-- libmonkeyball.so, built from native/ -->

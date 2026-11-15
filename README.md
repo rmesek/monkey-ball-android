@@ -34,3 +34,4 @@ Opcjonalne:
 | 2026-11-09 | Sterowanie żyroskopem (przechylenie telefonu) jako opcja w grze; obraz nie obraca się podczas sterowania; testy automatyczne |
 | 2026-11-15 | Uproszczenie kodu łączącego Kotlin z Rustem przed prezentacją; poprawka niestabilnego testu |
 | 2026-11-15 | Pomiar wydajności na telefonie bez narzędzi debugowania: statystyki klatek na ekranie, włączane skrótem „Play with metrics” |
+| 2026-11-15 | Przegląd poprawek i dobrych praktyk; gra nie zamyka się już przy zmianie czcionki lub języka systemu |

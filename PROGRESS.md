@@ -479,3 +479,15 @@ Poprawione:
 - Usunięta nieużywana przestrzeń nazw `tools` w manifeście.
 
 Bez zmian, bo są proste i zgodne z praktykami: jedna aktywność `GameActivity`, wywołania JNI w obie strony bez dodatkowych bibliotek, czujnik tylko w etapie i tylko na wierzchu, `OnBackPressedCallback` zależny od `nav_depth`, `dataExtractionRules`, `FLAG_KEEP_SCREEN_ON`, immersive przez `WindowInsetsControllerCompat`.
+
+## Krok 20: uproszczenie przed prezentacją
+
+Cel: kod łatwiejszy do przeczytania i wyjaśnienia, bez zmian w działaniu.
+
+- **Z Kotlina do Rusta: jedna skrzynka zamiast czterech zmiennych statycznych.** Funkcje `native*` (wybrany plik, wstecz, wcięcia ekranu, próbka przechylenia) tylko zostawiają wiadomość w `INBOX` (`Mutex<Inbox>`), a wątek gry odbiera ją raz na klatkę w `poll_input` i `insets`. Wcześniej były to `PICKED`, `BACK`, `INSETS` i `TILT`, każda innego typu (`Mutex`, `AtomicBool`, tablica `AtomicU32`).
+- **Z Rusta do Kotlina: jedna funkcja `call(app, metoda, Arg)` zamiast pięciu.** `Arg` (`None`, `Int`, `Bool`, `Text`) wyznacza sygnaturę JNI, a błąd wywołania jest logowany w jednym miejscu. Osobno zostaje tylko `has_tilt_sensor`, jedyna metoda zwracająca wartość.
+- **Dwa wyjścia z procesu opisane w jednym miejscu** (komentarz przy `MainActivity.onDestroy`): koniec aktywności kończy proces w Kotlinie, koniec gry w Ruście (`_exit` w `android_main`).
+- `GameEvents.tilt` usunięte: dublowało stan aktywności. Test sprawdza blokadę obrotu (`requestedOrientation`), czyli to, co widzi gracz. Komentarz w `MainActivity` mówi, które metody służą tylko testom.
+- `info()` zastąpione przez `game_data_line()`, wspólne dla startu i końca importu.
+- `.idea/deploymentTargetSelector.xml` i `.idea/deviceManager.xml` poza repozytorium (zmieniały się przy każdym wyborze urządzenia).
+- **Niestabilny test** `tiltSteeringListensToTheSensorAndKeepsTheRotationInAStage`: klawisze wysyłane bez przerwy, zanim ekran opcji się otworzył, czasem ginęły. Ten sam błąd występował na kodzie sprzed zmian. Teraz `pressKeys` z przerwami. Wszystkie 15 testów przeszło trzy razy z rzędu na emulatorze Pixel 9; `clippy -D warnings` i lint bez uwag do kodu.

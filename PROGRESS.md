@@ -491,3 +491,12 @@ Cel: kod łatwiejszy do przeczytania i wyjaśnienia, bez zmian w działaniu.
 - `info()` zastąpione przez `game_data_line()`, wspólne dla startu i końca importu.
 - `.idea/deploymentTargetSelector.xml` i `.idea/deviceManager.xml` poza repozytorium (zmieniały się przy każdym wyborze urządzenia).
 - **Niestabilny test** `tiltSteeringListensToTheSensorAndKeepsTheRotationInAStage`: klawisze wysyłane bez przerwy, zanim ekran opcji się otworzył, czasem ginęły. Ten sam błąd występował na kodzie sprzed zmian. Teraz `pressKeys` z przerwami. Wszystkie 15 testów przeszło trzy razy z rzędu na emulatorze Pixel 9; `clippy -D warnings` i lint bez uwag do kodu.
+
+## Krok 21: statystyki klatek na ekranie telefonu (etap 4)
+
+Telefon tylko uruchamia gotowy APK: bez USB, adb, logcat i Profilera. Dlatego pomiar na telefonie odczytuje się z ekranu, a szczegółowe porównanie wariantu natywnego i WebView powstanie na emulatorze, gdzie narzędzia działają (liczby względne, nie wartości z telefonu). Bez pomiaru baterii (zbyt zależny od profili wydajności telefonu) i bez eksportu raportu do pliku.
+
+- **Włączanie: skrót aplikacji** (przytrzymanie ikony → „Play with metrics”), `res/xml/shortcuts.xml` i `meta-data android.app.shortcuts` w manifeście. Skrót uruchamia `MainActivity` z dodatkiem `metrics=true`. Zwykłe uruchomienie nic nie pokazuje, więc gotowy APK nie wyświetla pomiarów, dopóki gracz o nie nie poprosi. Silnik (submoduł) bez zmian: opcja w menu gry wymagałaby zmian w `monkey-ball-rs`, a właściwość systemowa wymaga adb.
+- **Rust** (`on_frame`): podsumowanie co 5 s gry, te same liczby co w logcat (`perf:`, format linii bez zmian), trafia też do `MainActivity.onPerf` jako kilka linii z nazwą GPU.
+- **Kotlin** (`Metrics.kt`, `MetricsOverlay`): `TextView` na dole ekranu, dodany przez `addContentView` tylko przy włączonych pomiarach; dopisuje pamięć aplikacji (PSS, `Debug.getMemoryInfo`). Pamięć jest odczytywana w wątku UI, nie w wątku gry, żeby odczyt nie pojawił się jako wolna klatka w samych pomiarach.
+- Test `metricsShortcutShowsFrameStatistics` (start z dodatkiem jak ze skrótu, etap, statystyki z GPU i pamięcią) oraz sprawdzenie w `laterStartsGoStraightToTheMenu`, że zwykły start nie pokazuje nakładki. 16 testów zielonych na emulatorze; skrót sprawdzony ręcznie w launcherze emulatora.

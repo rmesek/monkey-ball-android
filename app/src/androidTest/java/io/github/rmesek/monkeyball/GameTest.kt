@@ -1,5 +1,6 @@
 package io.github.rmesek.monkeyball
 
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Rect
 import android.os.ParcelFileDescriptor
@@ -73,9 +74,10 @@ class GameTest {
     fun laterStartsGoStraightToTheMenu() {
         // The game data of importsTheDiscImageAndShowsTheMenu, which runs before (FixMethodOrder).
         assumeTrue("no game data: run importsTheDiscImageAndShowsTheMenu first", pack.exists())
-        ActivityScenario.launch(MainActivity::class.java)
+        val scenario = ActivityScenario.launch(MainActivity::class.java)
         waitFor("the title menu", 30) { GameEvents.state == "menu" }
         assertEquals("first state", "menu", GameEvents.states.first())
+        assertTrue("no metrics on a normal start", !hasMetrics(scenario))
         assertNoErrors()
     }
 
@@ -93,6 +95,25 @@ class GameTest {
         assertEquals("the game is still open", Lifecycle.State.RESUMED, scenario.state)
         assertNoErrors()
         // At the title "back" leaves the app, which ends this process: not done here.
+    }
+
+    /**
+     * Started as the "Play with metrics" shortcut starts it (res/xml/shortcuts.xml): the frame statistics
+     * appear over the game after 5 s of play, with the GPU and the memory.
+     */
+    @Test
+    fun metricsShortcutShowsFrameStatistics() {
+        assumeTrue("no game data: run importsTheDiscImageAndShowsTheMenu first", pack.exists())
+        val context = instrumentation.targetContext
+        val intent = Intent(context, MainActivity::class.java).putExtra(MetricsOverlay.EXTRA, true)
+        val scenario = ActivityScenario.launch<MainActivity>(intent)
+        waitFor("the title menu", 30) { GameEvents.state == "menu" }
+        assertTrue("metrics on", hasMetrics(scenario))
+        startAStage()
+        waitFor("frame statistics", 15) { "fps" in metricsText(scenario) }
+        val text = metricsText(scenario)
+        assertTrue("GPU and memory: $text", GameEvents.adapter!! in text && "MB (PSS)" in text)
+        assertNoErrors()
     }
 
     @Test
@@ -246,6 +267,18 @@ class GameTest {
         var orientation = 0
         scenario.onActivity { orientation = it.requestedOrientation }
         return orientation
+    }
+
+    private fun hasMetrics(scenario: ActivityScenario<MainActivity>): Boolean {
+        var has = false
+        scenario.onActivity { has = it.metrics != null }
+        return has
+    }
+
+    private fun metricsText(scenario: ActivityScenario<MainActivity>): String {
+        var text = ""
+        scenario.onActivity { text = it.metrics?.text.orEmpty() }
+        return text
     }
 
     private fun hasTiltSensor(scenario: ActivityScenario<MainActivity>): Boolean {

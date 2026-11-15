@@ -7,4 +7,11 @@
     <string name="pick_image_choose">Choose file</string>
     <!-- When the picked file is not the game: the game's own reason follows as the message. -->
     <string name="pick_image_refused_title">This file cannot be used</string>
+
+    <!-- The app shortcut that shows frame statistics over the game (Metrics.kt). -->
+    <string name="metrics_shortcut_short">Play with metrics</string>
+    <string name="metrics_shortcut_long">Play with frame statistics on screen</string>
+    <string name="metrics_waiting">Metrics: the first after 5 s in a stage</string>
+    <!-- The engine's summary, then the app's memory in MB. -->
+    <string name="metrics_memory">%1$s\nmemory %2$d MB (PSS)</string>
 </resources>

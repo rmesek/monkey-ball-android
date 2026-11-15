@@ -85,7 +85,10 @@ monkey-ball-android/
   - czas startu,
   - CPU i zużycie baterii.
 - [ ] Zawsze te same etapy i ten sam telefon. (Logcat `perf:` co 5 s gry jest gotowy; pomiar na emulatorze w PROGRESS.md, krok 10.)
-- [ ] Do ustalenia: jak mierzyć na telefonie bez debugowania (telefon tylko uruchamia gotowy APK; bez USB, adb, logcat i Profilera). Debugowanie i testy tylko na emulatorze.
+- [ ] Sposób pomiaru (telefon tylko uruchamia gotowy APK; bez USB, adb, logcat i Profilera):
+  - porównanie natywny/WebView na tym samym emulatorze, z pełnymi narzędziami (liczby względne, nie wartości z telefonu),
+  - [x] na telefonie: nakładka z wynikami `perf:` na ekranie, włączana skrótem aplikacji „Play with metrics” (domyślnie wyłączona; `Metrics.kt`); w WebView `?fps=1`,
+  - bez pomiaru baterii (zbyt zależny od profili wydajności telefonu) i bez eksportu raportu do pliku.
 
 ## Na później
 

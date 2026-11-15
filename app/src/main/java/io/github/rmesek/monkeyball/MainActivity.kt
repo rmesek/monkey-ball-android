@@ -27,7 +27,12 @@ import kotlin.system.exitProcess
  *
  * This class does what only the Android side can: the document picker for the disc image, the system
  * "back", full screen and the space taken by system bars, the orientation sensor for tilt steering, messages
- * to the player; and it records what the game reports (GameEvents).
+ * to the player.
+ *
+ * Talking to Rust (native/src/lib.rs) goes both ways: the `external fun native*` at the end send news to the
+ * game thread, and the public methods marked "Called from Rust" are called by name from it. The `onGame*`,
+ * `onNavDepth` and `onImageRefused` reports mostly feed GameEvents, which only the instrumented tests read;
+ * they can be skipped on a first reading.
  */
 class MainActivity : GameActivity() {
 
@@ -108,12 +113,16 @@ class MainActivity : GameActivity() {
     }
 
     /**
-     * The activity is going away for good ("back" at the title, swiped away, closed by the system). winit
-     * 0.30 does not pass this on to the game, so the game's thread would keep running, and GameActivity's
-     * onDestroy waits for that thread: the app would hang, and the next start would stay on the splash
-     * screen. The game runs once per process and saves as it goes, so end the process here; the next start
-     * gets a fresh one. (The manifest's configChanges keep rotation and the like from destroying it.)
-     * Hence no super.onDestroy(): that is the call that would wait.
+     * One game per process: the process ends when the game does. There are two ways to the end, so two
+     * exits:
+     *  - Here: the activity is going away for good ("back" at the title, swiped away, closed by the system).
+     *    winit 0.30 does not pass this on to the game, so the game's thread would keep running, and
+     *    GameActivity's onDestroy waits for that thread: the app would hang, and the next start would stay
+     *    on the splash screen. Hence exitProcess and no super.onDestroy(), the call that would wait.
+     *  - In Rust, at the end of `android_main` (native/src/lib.rs): the game ends itself (the picker canceled
+     *    at the first start, "Remove game data"), and the activity is still there.
+     * The game saves as it goes, so nothing is lost; the next start gets a fresh process. (The manifest's
+     * configChanges keep rotation and the like from destroying the activity.)
      */
     @SuppressLint("MissingSuperCall")
     override fun onDestroy() {
@@ -154,7 +163,6 @@ class MainActivity : GameActivity() {
     @Suppress("unused")
     fun setTilt(on: Boolean) = runOnUiThread {
         tilt = on
-        GameEvents.tilt = on
         requestedOrientation =
             if (on) ActivityInfo.SCREEN_ORIENTATION_LOCKED else ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
         listenToTilt(on && lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED))

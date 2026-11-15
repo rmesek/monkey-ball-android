@@ -16,8 +16,7 @@ use std::fs::File;
 use std::os::fd::FromRawFd;
 use std::path::Path;
 use std::rc::Rc;
-use std::sync::Mutex;
-use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+use std::sync::{Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
 use jni::objects::JObject;
@@ -103,25 +102,47 @@ fn choose_backend() -> wgpu::Backends {
     }
 }
 
-/// What the document picker returned that the game thread has not taken yet: a file descriptor this
-/// library now owns, or -1 when the player canceled. Written on the UI thread, read in `poll_input`.
-static PICKED: Mutex<Option<i32>> = Mutex::new(None);
+// From Kotlin to Rust. The activity calls the `native*` functions below on the UI thread; each one only
+// leaves its news in the inbox, and the game thread reads it once per frame (`poll_input`, `insets`).
 
-/// `MainActivity.nativeImagePicked(fd)`, on the UI thread.
+/// What the activity has sent that the game thread has not taken yet.
+struct Inbox {
+    /// The document picker's answer: a file descriptor this library now owns, or -1 when the player
+    /// canceled.
+    picked: Option<i32>,
+    /// The system "back" (gesture or button), sent while the game has somewhere to go back to
+    /// (`Game::nav_depth` above 0): one press of Cancel.
+    back: bool,
+    /// The latest orientation sample while tilt steers: W3C `deviceorientation` beta and gamma in degrees
+    /// and the screen's rotation (0, 90, 180, 270).
+    tilt: Option<(f32, f32, i32)>,
+    /// Space covered by system bars and cutouts (left, top, right, bottom), in window pixels. Not taken:
+    /// it stays until the activity sends new values.
+    insets: [f32; 4],
+}
+
+static INBOX: Mutex<Inbox> = Mutex::new(Inbox {
+    picked: None,
+    back: false,
+    tilt: None,
+    insets: [0.0; 4],
+});
+
+fn inbox() -> MutexGuard<'static, Inbox> {
+    INBOX.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// `MainActivity.nativeImagePicked(fd)`.
 #[unsafe(no_mangle)]
 extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeImagePicked(
     _env: JNIEnv,
     _this: JObject,
     fd: jni::sys::jint,
 ) {
-    *PICKED.lock().unwrap_or_else(|e| e.into_inner()) = Some(fd);
+    inbox().picked = Some(fd);
 }
 
-/// Space covered by system bars and cutouts (left, top, right, bottom), in window pixels, as the activity
-/// last reported it. Written on the UI thread, read every frame on the game thread.
-static INSETS: [AtomicU32; 4] = [const { AtomicU32::new(0) }; 4];
-
-/// `MainActivity.nativeInsets(left, top, right, bottom)`, on the UI thread.
+/// `MainActivity.nativeInsets(left, top, right, bottom)`.
 #[unsafe(no_mangle)]
 extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeInsets(
     _env: JNIEnv,
@@ -131,30 +152,19 @@ extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeInsets(
     right: jni::sys::jint,
     bottom: jni::sys::jint,
 ) {
-    for (slot, px) in INSETS.iter().zip([left, top, right, bottom]) {
-        slot.store(px.max(0) as u32, Ordering::Relaxed);
-    }
+    inbox().insets = [left, top, right, bottom].map(|px| px.max(0) as f32);
 }
 
-/// The system "back" (gesture or button), sent by the activity while the game has somewhere to go back
-/// to (`Game::nav_depth` above 0); taken in `poll_input` as one press of Cancel.
-static BACK: AtomicBool = AtomicBool::new(false);
-
-/// `MainActivity.nativeBack()`, on the UI thread.
+/// `MainActivity.nativeBack()`.
 #[unsafe(no_mangle)]
 extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeBack(
     _env: JNIEnv,
     _this: JObject,
 ) {
-    BACK.store(true, Ordering::Relaxed);
+    inbox().back = true;
 }
 
-/// The latest orientation sample the game thread has not taken yet: W3C `deviceorientation` beta and gamma
-/// in degrees and the screen's rotation (0, 90, 180, 270). Written on the UI thread while tilt steers,
-/// taken in `poll_input`.
-static TILT: Mutex<Option<(f32, f32, i32)>> = Mutex::new(None);
-
-/// `MainActivity.nativeTilt(beta, gamma, screenAngle)`, on the UI thread.
+/// `MainActivity.nativeTilt(beta, gamma, screenAngle)`.
 #[unsafe(no_mangle)]
 extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeTilt(
     _env: JNIEnv,
@@ -163,8 +173,10 @@ extern "system" fn Java_io_github_rmesek_monkeyball_MainActivity_nativeTilt(
     gamma: jni::sys::jfloat,
     screen_angle: jni::sys::jint,
 ) {
-    *TILT.lock().unwrap_or_else(|e| e.into_inner()) = Some((beta, gamma, screen_angle));
+    inbox().tilt = Some((beta, gamma, screen_angle));
 }
+
+// From Rust to Kotlin: the game thread calls public methods of `MainActivity` by name.
 
 /// Run `call` with a JNI environment and the activity (`MainActivity`), on the game thread.
 fn with_activity<T>(
@@ -179,38 +191,39 @@ fn with_activity<T>(
     call(&mut env, &activity)
 }
 
-/// Call a method of the activity from the game thread: `void method()`, or `void method(String)` with
-/// `text`.
-fn call_activity(app: &AndroidApp, method: &str, text: Option<&str>) -> jni::errors::Result<()> {
-    with_activity(app, |env, activity| {
-        match text {
-            None => env.call_method(activity, method, "()V", &[])?,
-            Some(text) => {
-                let text = env.new_string(text)?;
-                env.call_method(activity, method, "(Ljava/lang/String;)V", &[(&text).into()])?
-            }
-        };
-        Ok(())
-    })
+/// The argument of a `void` method of the activity; it also gives the method's JNI signature.
+enum Arg<'a> {
+    None,
+    Int(i32),
+    Bool(bool),
+    Text(&'a str),
 }
 
-/// `MainActivity.onNavDepth(depth)`: whether the system "back" stays in the game (above 0) or leaves it.
-fn report_nav_depth(app: &AndroidApp, depth: u32) {
-    let depth = depth.min(i32::MAX as u32) as i32;
-    let call = with_activity(app, |env, activity| {
-        env.call_method(activity, "onNavDepth", "(I)V", &[depth.into()])
-            .map(drop)
+/// Call `void MainActivity.<method>(arg)`. A failure is logged and only costs that call; `false` then.
+fn call(app: &AndroidApp, method: &str, arg: Arg) -> bool {
+    let result = with_activity(app, |env, activity| {
+        match arg {
+            Arg::None => env.call_method(activity, method, "()V", &[]),
+            Arg::Int(v) => env.call_method(activity, method, "(I)V", &[v.into()]),
+            Arg::Bool(v) => env.call_method(activity, method, "(Z)V", &[v.into()]),
+            Arg::Text(text) => {
+                let text = env.new_string(text)?;
+                env.call_method(activity, method, "(Ljava/lang/String;)V", &[(&text).into()])
+            }
+        }
+        .map(drop)
     });
-    if let Err(e) = call {
+    if let Err(e) = &result {
         log(
             LOG_ERROR,
-            &format!("cannot call MainActivity.onNavDepth: {e}"),
+            &format!("cannot call MainActivity.{method}: {e}"),
         );
     }
+    result.is_ok()
 }
 
 /// `MainActivity.hasTiltSensor()`: whether the device reports its orientation, so tilt can steer
-/// (`Caps::tilt`, which shows the Controls row in the options).
+/// (`Caps::tilt`, which shows the Controls row in the options). The one call that returns something.
 fn has_tilt_sensor(app: &AndroidApp) -> bool {
     let call = with_activity(app, |env, activity| {
         env.call_method(activity, "hasTiltSensor", "()Z", &[])?.z()
@@ -222,28 +235,6 @@ fn has_tilt_sensor(app: &AndroidApp) -> bool {
         );
         false
     })
-}
-
-/// `MainActivity.setTilt(on)`: listen to the orientation sensor and keep the screen from rotating, or stop.
-fn set_tilt(app: &AndroidApp, on: bool) {
-    let call = with_activity(app, |env, activity| {
-        env.call_method(activity, "setTilt", "(Z)V", &[on.into()])
-            .map(drop)
-    });
-    if let Err(e) = call {
-        log(LOG_ERROR, &format!("cannot call MainActivity.setTilt: {e}"));
-    }
-}
-
-/// Tell the activity something happened (`onGameReady`, `onGameState`, `onGameError`, `onImageRefused`).
-/// The activity logs it and keeps it for the instrumented tests; a failure here only costs the report.
-fn notify(app: &AndroidApp, method: &str, text: &str) {
-    if let Err(e) = call_activity(app, method, Some(text)) {
-        log(
-            LOG_ERROR,
-            &format!("cannot call MainActivity.{method}: {e}"),
-        );
-    }
 }
 
 /// Open the picked file as a disc image. `Importer::open` also checks that it is the game.
@@ -288,13 +279,9 @@ fn first_settings(storage: &mut dyn Storage) {
     }
 }
 
-/// The options screen's lines on what is kept on the device.
-fn info(pack_len: Option<u64>) -> Vec<String> {
-    let mut lines: Vec<String> = (pack_len.into_iter())
-        .map(|len| format!("Game data: {} MB", len >> 20))
-        .collect();
-    lines.push("Kept with the saves in the app's storage".into());
-    lines
+/// The first of the options screen's lines on what is kept on the device, once there is game data.
+fn game_data_line(bytes: u64) -> String {
+    format!("Game data: {} MB", bytes >> 20)
 }
 
 struct Android {
@@ -329,8 +316,8 @@ const PERF_PERIOD: Duration = Duration::from_secs(5);
 
 impl Android {
     fn start_picker(&mut self) {
-        if let Err(e) = call_activity(&self.app, "pickImage", None) {
-            log(LOG_ERROR, &format!("cannot open the document picker: {e}"));
+        // Without the picker there is no way to get an image: end the game.
+        if !call(&self.app, "pickImage", Arg::None) {
             self.exit = true;
         }
     }
@@ -342,11 +329,19 @@ impl Platform for Android {
             input.set_action(Action::Cancel, false);
             self.back_down = false;
         }
-        if BACK.swap(false, Ordering::Relaxed) {
+        // Take the news out of the inbox first: the calls into the activity below must not hold its lock.
+        let (back, picked, tilt) = {
+            let mut inbox = inbox();
+            (
+                std::mem::take(&mut inbox.back),
+                inbox.picked.take(),
+                inbox.tilt.take(),
+            )
+        };
+        if back {
             input.set_action(Action::Cancel, true);
             self.back_down = true;
         }
-        let picked = PICKED.lock().unwrap_or_else(|e| e.into_inner()).take();
         match picked {
             // Canceled: without an image there is nothing to play (as on the desktop).
             Some(fd) if fd < 0 => self.exit = true,
@@ -357,13 +352,13 @@ impl Platform for Android {
                     // The import screen has no fonts before it has an image, so the activity says it, in
                     // the dialog before the picker opens again.
                     log(LOG_ERROR, &format!("not a usable disc image: {e}"));
-                    notify(&self.app, "onImageRefused", &e);
+                    call(&self.app, "onImageRefused", Arg::Text(&e));
                     self.start_picker();
                 }
             },
             None => {}
         }
-        if let Some((beta, gamma, angle)) = TILT.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        if let Some((beta, gamma, angle)) = tilt {
             self.tilt.sample(beta, gamma, angle);
         }
         for command in host.drain() {
@@ -373,10 +368,7 @@ impl Platform for Android {
                     self.remove_data = true;
                     self.exit = true;
                 }
-                Command::GameDataReady { bytes } => {
-                    host.info
-                        .insert(0, format!("Game data: {} MB", bytes >> 20));
-                }
+                Command::GameDataReady { bytes } => host.info.insert(0, game_data_line(bytes)),
                 // The menu says how the player steers at its start and whenever the option changes.
                 // The sensor and the rotation lock follow in `after_update`, once a stage runs.
                 Command::Tilt { enabled, range_deg } => {
@@ -397,8 +389,7 @@ impl Platform for Android {
     fn insets(&mut self, _window: &Window) -> Insets {
         // The surface is the window at full resolution (the default render scale), so window pixels are
         // surface pixels.
-        let [left, top, right, bottom] =
-            INSETS.each_ref().map(|v| v.load(Ordering::Relaxed) as f32);
+        let [left, top, right, bottom] = inbox().insets;
         Insets {
             left,
             top,
@@ -415,11 +406,12 @@ impl Platform for Android {
         if top.name() != self.top {
             self.top = top.name();
             log(LOG_INFO, &format!("state: {}", self.top));
-            notify(&self.app, "onGameState", self.top);
+            call(&self.app, "onGameState", Arg::Text(self.top));
         }
         if top.nav_depth() != self.nav_depth {
             self.nav_depth = top.nav_depth();
-            report_nav_depth(&self.app, self.nav_depth);
+            let depth = self.nav_depth.min(i32::MAX as u32) as i32;
+            call(&self.app, "onNavDepth", Arg::Int(depth));
         }
         // Tilt steers only in a stage. The menus leave the sensor off and the screen free to rotate, so the
         // player can turn the phone to the orientation they want to play in before a stage starts.
@@ -427,7 +419,7 @@ impl Platform for Android {
         if steering != self.tilt_steering {
             self.tilt_steering = steering;
             log(LOG_INFO, &format!("tilt steering: {steering}"));
-            set_tilt(&self.app, steering);
+            call(&self.app, "setTilt", Arg::Bool(steering));
         }
     }
 
@@ -442,7 +434,7 @@ impl Platform for Android {
 
     fn on_ready(&mut self, gpu: &str) {
         log(LOG_INFO, &format!("adapter: {gpu}"));
-        notify(&self.app, "onGameReady", gpu);
+        call(&self.app, "onGameReady", Arg::Text(gpu));
     }
 
     fn on_frame(&mut self, sample: &FrameSample) {
@@ -476,7 +468,7 @@ impl Platform for Android {
 
     fn on_error(&mut self, msg: &str) {
         log(LOG_ERROR, &format!("error: {msg}"));
-        notify(&self.app, "onGameError", msg);
+        call(&self.app, "onGameError", Arg::Text(msg));
     }
 }
 
@@ -493,24 +485,24 @@ fn run(app: AndroidApp) -> Result<(), String> {
     first_settings(&mut storage);
     let menu: Box<dyn Game> = Box::new(Menu::new(Box::new(storage)).with_audio(audio.clone()));
     // The system closes apps: no "Quit" on the title. The game data can be removed from the options.
+    // The options' lines on what is kept on the device: the game data's size comes first once there is any.
     let mut host = Host::new(
         Caps {
             remove_data: true,
             tilt: has_tilt_sensor(&app),
             ..Caps::default()
         },
-        Vec::new(),
+        vec!["Kept with the saves in the app's storage".into()],
     );
     let pack = dir.join(PACK_FILE);
     let mut images = None;
     let (content, initial) = match stored_pack(&pack) {
         Some((content, _, len)) => {
-            host.info = info(Some(len));
+            host.info.insert(0, game_data_line(len));
             (content, menu)
         }
         None => {
             // First start: the import screen asks for the image (Command::PickImage) and fills the pack.
-            host.info = info(None);
             let data = Rc::new(LatePack::default());
             let slot = ImageSlot::default();
             images = Some(slot.clone());
@@ -558,7 +550,7 @@ fn android_main(app: AndroidApp) {
     }
     // One game per process: winit refuses a second event loop, and the engine installs its trig tables
     // once. Android keeps a process after its activity is gone, so end it here and let the next start be
-    // a fresh one. `_exit`, not `std::process::exit`: the latter runs the libraries' static destructors on
+    // a fresh one. (The other exit, when the activity goes first, is `MainActivity.onDestroy`.) `_exit`, not `std::process::exit`: the latter runs the libraries' static destructors on
     // this thread, and one of them frees a JNI reference with the main thread's JNIEnv, which aborts the
     // process (a native crash report instead of a quiet exit). Everything worth keeping is written by now.
     // SAFETY: ends the process at once; nothing runs after it.

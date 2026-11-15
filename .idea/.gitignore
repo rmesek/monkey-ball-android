@@ -1,3 +1,6 @@
 # Default ignored files
 /shelf/
 /workspace.xml
+# Per machine: the device picked to run on and the Device Manager table (they change with every click).
+/deploymentTargetSelector.xml
+/deviceManager.xml

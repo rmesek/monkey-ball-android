@@ -33,3 +33,4 @@ Opcjonalne:
 | 2026-11-02 | Testy automatyczne uruchamiane z Android Studio; poprawki działania na Androidzie (paski systemowe, przycisk wstecz, powrót z tła, ponowne otwarcie) i pomiar wydajności |
 | 2026-11-09 | Sterowanie żyroskopem (przechylenie telefonu) jako opcja w grze; obraz nie obraca się podczas sterowania; testy automatyczne |
 | 2026-11-15 | Pomiar wydajności na telefonie: statystyki na ekranie, włączane skrótem „Play with metrics” |
+| 2026-11-17 | Przycisk zerowania żyroskopu działa także przytrzymany: wystarczy przechylić telefon i puścić |

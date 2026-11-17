@@ -20,7 +20,7 @@ monkey-ball-android/
   webview/          aplikacja WebView (etap 5)
   gradle/, settings.gradle.kts, build.gradle.kts, gradlew
   native/           crate Rust typu cdylib: android_main, Platform, funkcje JNI
-  monkey-ball-rs/   submoduł z silnikiem na tagu v1.0.0
+  monkey-ball-rs/   submoduł z silnikiem na tagu v1.1.0
 ```
 
 ## Etap 0: środowisko

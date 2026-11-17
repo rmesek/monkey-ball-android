@@ -523,3 +523,12 @@ Przegląd, czy wcześniejsze poprawki usuwają przyczyny, a nie objawy, i porów
 **Po przeglądzie przed prezentacją: lokalne referencje JNI.** Wątek gry nigdy nie wraca do Javy, więc lokalne referencje, które tworzy, nie są zwalniane same. `call(..., Arg::Text)` tworzył jedną na każdy napis wysłany do aktywności (zmiana stanu gry, podsumowanie `perf:` co 5 s). Objawów nie było, ale teraz napis jest zwalniany od razu (`env.auto_local`). `clippy -D warnings` bez uwag, 16 testów zielonych na emulatorze (debug, CheckJNI).
 
 **Wersja 0.1.1** (`versionCode` 2): wydanie 0.1.0 z poprawką lokalnych referencji JNI, podpisane tym samym kluczem, więc instaluje się jako aktualizacja z zachowaniem danych gry i zapisów.
+
+## Krok 23: silnik v1.1.0, wersja 0.2.0
+
+**Przytrzymany przycisk zerowania.** Przy sterowaniu przechyłem przycisk z krzyżykiem zeruje teraz pozycję w każdej klatce, dopóki jest wciśnięty: można przechylić telefon do wygodnej pozycji i puścić przycisk, bez klikania po każdej zmianie. Krótkie stuknięcie działa jak wcześniej.
+- Zmiana jest w silniku (`monkey-ball-rs` v1.1.0, `mb-app/src/play.rs`: `held` zamiast `pressed`), nie w porcie. Dzięki temu natywna aplikacja i przyszła wersja WebView zachowują się tak samo, a `native/` pozostaje bez zmian: obsługuje już `Command::CalibrateTilt`.
+- W silniku: test na prawdziwym stanie gry (na starym kodzie pada od drugiej przytrzymanej klatki) i wszystkie bramki, łącznie z testem w przeglądarce.
+- Tutaj: submoduł na `v1.1.0`, `clippy -D warnings` bez uwag, 16 testów zielonych na emulatorze. Samego przytrzymania przy przechylaniu nie da się sprawdzić bez telefonu.
+
+**Wersja 0.2.0** (`versionCode` 3): nowe zachowanie dla gracza i nowy silnik, więc wersja minor, nie poprawka. Podpisana tym samym kluczem instaluje się jako aktualizacja.

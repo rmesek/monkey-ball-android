@@ -851,7 +851,7 @@ dependencies = [
 
 [[package]]
 name = "mb-app"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "cpal",
  "glam",
@@ -870,18 +870,18 @@ dependencies = [
 
 [[package]]
 name = "mb-assets"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "ruzstd",
 ]
 
 [[package]]
 name = "mb-audio"
-version = "1.0.0"
+version = "1.1.0"
 
 [[package]]
 name = "mb-driver"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "mb-app",
  "mb-render",
@@ -894,22 +894,22 @@ dependencies = [
 
 [[package]]
 name = "mb-engine"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "mb-stage",
 ]
 
 [[package]]
 name = "mb-game"
-version = "1.0.0"
+version = "1.1.0"
 
 [[package]]
 name = "mb-gma"
-version = "1.0.0"
+version = "1.1.0"
 
 [[package]]
 name = "mb-render"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "bytemuck",
  "glam",
@@ -921,11 +921,11 @@ dependencies = [
 
 [[package]]
 name = "mb-stage"
-version = "1.0.0"
+version = "1.1.0"
 
 [[package]]
 name = "mb-tpl"
-version = "1.0.0"
+version = "1.1.0"
 
 [[package]]
 name = "memchr"
@@ -944,7 +944,7 @@ dependencies = [
 
 [[package]]
 name = "monkeyball"
-version = "0.1.1"
+version = "0.2.0"
 dependencies = [
  "jni 0.21.1",
  "mb-app",

@@ -519,3 +519,5 @@ Przegląd, czy wcześniejsze poprawki usuwają przyczyny, a nie objawy, i porów
 - Bez Compose: interfejs gry rysuje silnik (wspólny z desktopem i przeglądarką), a Kotlin obsługuje tylko to, co wymaga Androida.
 - Bez UniFFI: wątek i pętlę gry ma Rust, który woła aktywność; Kotlin wysyła tylko 4 proste wiadomości. UniFFI dodałby generator kodu i bibliotekę JNA. Ręczna warstwa JNI ma około 120 linii w dwóch miejscach (`Inbox`, `call`).
 - Debug buduje obie architektury, a projekt Android nie ma własnego CI: obie rzeczy dodałyby konfigurację, a aplikacji nie upraszczają.
+
+**Po przeglądzie przed prezentacją: lokalne referencje JNI.** Wątek gry nigdy nie wraca do Javy, więc lokalne referencje, które tworzy, nie są zwalniane same. `call(..., Arg::Text)` tworzył jedną na każdy napis wysłany do aktywności (zmiana stanu gry, podsumowanie `perf:` co 5 s). Objawów nie było, ale teraz napis jest zwalniany od razu (`env.auto_local`). `clippy -D warnings` bez uwag, 16 testów zielonych na emulatorze (debug, CheckJNI).

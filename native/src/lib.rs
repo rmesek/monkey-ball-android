@@ -207,8 +207,10 @@ fn call(app: &AndroidApp, method: &str, arg: Arg) -> bool {
             Arg::Int(v) => env.call_method(activity, method, "(I)V", &[v.into()]),
             Arg::Bool(v) => env.call_method(activity, method, "(Z)V", &[v.into()]),
             Arg::Text(text) => {
-                let text = env.new_string(text)?;
-                env.call_method(activity, method, "(Ljava/lang/String;)V", &[(&text).into()])
+                // The game thread never returns to Java, so nothing frees its local references for it:
+                // this one is deleted when `text` goes out of scope.
+                let text = env.auto_local(env.new_string(text)?);
+                env.call_method(activity, method, "(Ljava/lang/String;)V", &[(&*text).into()])
             }
         }
         .map(drop)
